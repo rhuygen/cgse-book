@@ -79,6 +79,17 @@ while True:
 - **What it costs, and why the docstring warns about it explicitly:** *"the* `callback` *function is executed in the* `serve()` *event loop, it shall not block!"* (from `schedule_task`'s docstring). Because everything happens on one thread, one slow operation — a device command that takes three seconds, a scheduled task that blocks on network I/O — stalls *every other concern* of this server for that same duration: no other commands get processed, no monitoring gets published, no housekeeping gets collected. This isn't a hidden gotcha; it's the direct, unavoidable consequence of choosing simplicity-through-single-threading, and it's the reason `schedule_task` exists at all as an escape hatch (Section 3.2) rather than calling blocking code directly from `before_serve` or a subclass override.
 - **The 50ms poll timeout** is the tuning knob that balances "responsive to new events" against "don't spin the CPU for no reason." It's not configurable per-instance — it's a literal `50` in the `serve()` method — which is a reasonable simplification given that every control server has the same basic responsiveness requirement (sub-100ms reaction to a new command), and no server built on this base class so far has needed a different value.
 
+### A second self-flagged rough edge, two lines above this loop
+
+```python
+# FIXME: we shall use the time.perf_counter() here!
+
+last_time = time_in_ms()
+last_time_hk = time_in_ms()
+```
+
+The `mon_delay`/`hk_delay` scheduling checks quoted above (`time_in_ms() - last_time >= self.mon_delay`) run against a clock read using `time_in_ms()` (`egse.system`), which is wall-clock time (`time.time()`), not a monotonic one — and `time_in_ms()`'s own docstring says as much: *"if you are looking for a high performance timer, you should really be using* `perf_counter()` *instead."* Wall-clock time can jump — an NTP correction, a manual clock change — and a control server is exactly the kind of process expected to run unattended for weeks at a stretch, long enough to see one. A backward jump would make `time_in_ms() - last_time` go negative and stall the monitoring/housekeeping cadence until the deficit is made up; a forward jump would fire it early. Same treatment as Section 2's poller FIXME: formalized here as **P-009** in the Pitfalls appendix rather than fixed while writing documentation — swapping to a `perf_counter()`-based elapsed-time calculation is small and self-contained, but it's a live scheduling loop in a process that runs unattended, so it deserves a deliberate PR with its own test, not a silent edit.
+
 ### 3.1 Why `serve()` explicitly tells you Ctrl-C won't work
 
 ```python

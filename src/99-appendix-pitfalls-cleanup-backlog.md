@@ -83,3 +83,12 @@ Entries are grouped by the chapter they surfaced in and listed in the order they
 **Issue:** Two apparently parallel mechanisms exist for building a dynamically-commandable client object (`Proxy`'s `load_commands()` vs. `DynamicProxy`'s `DynamicClientCommandMixin`), with an author-acknowledged TODO suggesting some historical duplication between `Proxy` and `BaseProxy` was never fully cleaned up.
 **Fix scope:** Needs a decision, not just a patch: confirm whether `DynamicProxy` is legacy, experimental, or intentionally different in scope from `Proxy`, then either consolidate, deprecate one, or document the distinction clearly in both classes' docstrings. Separately, verify the `get_service_proxy()` port-forwarding FIXME against a live control server.
 **Risk of leaving as-is:** Low day-to-day (both classes work), but high risk for a successor maintainer trying to decide which one to subclass for a new device — exactly the kind of ambiguity this book is meant to resolve while the reasoning is still available.
+
+### P-009 `serve()` Scheduling Clock Uses Wall-Clock Time, Not Monotonic
+
+*Self-flagged in source with a FIXME comment.*
+**Module:** `egse/control.py`
+**Where:** `ControlServer.serve()`, the `last_time = time_in_ms()` / `last_time_hk = time_in_ms()` initialization, two lines below `# FIXME: we shall use the time.perf_counter() here!`
+**Issue:** The `mon_delay`/`hk_delay` monitoring and housekeeping cadence is computed as `time_in_ms() - last_time >= self.mon_delay`. `time_in_ms()` (`egse.system`) wraps `time.time()` — wall-clock, not monotonic — and its own docstring recommends `perf_counter()` for exactly this kind of use. A backward system-clock adjustment (NTP correction, manual change) would make the elapsed-time computation go negative and stall monitoring/housekeeping until the deficit is made up; a forward jump would fire it early. `ControlServer` instances are meant to run unattended for extended periods, long enough to plausibly see a clock adjustment.
+**Fix scope:** Small and self-contained — track elapsed time via `time.perf_counter()` instead of `time_in_ms()` differences. Should ship with a test that simulates a backward wall-clock jump and asserts the scheduling cadence is unaffected, since the current code has clearly run for a long time without anyone hitting this.
+**Risk of leaving as-is:** Low-to-medium. No reported incident so far, but the failure mode (delayed or skipped housekeeping/monitoring after a clock adjustment) would be silent and easy to misattribute to something else if it ever occurred.
