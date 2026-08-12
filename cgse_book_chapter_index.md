@@ -30,7 +30,8 @@ Findings logged in the Pitfalls appendix: P-006 (`ControlServer.service_id` neve
 
 ## Running appendix
 
-**Pitfalls & Cleanup Backlog** (`src/99-appendix-pitfalls-cleanup-backlog.md`) — currently P-001 through P-008. Template included at the bottom of that file for adding new entries in the established format.
+**Pitfalls & Cleanup Backlog** (`src/back-matter/01-appendix-pitfalls-cleanup-backlog.md`) — currently P-001 through P-008. Template included at the bottom of that file for adding new entries in the established format.
+
 
 ## Repo layout (current)
 
@@ -39,12 +40,15 @@ cgse-book/
   cgse_book_project_instructions.md
   cgse-book-chapter-index.md
   src/
-    00-preface.md
+    front-matter/
+      01-title-verso.md
+      02-preface.md
     part-1-orientation/
       00-outline.md
     part-2-core-concepts/
       01-settings-and-setup.md
       02-env.md
       03-control-and-proxy.md
-    99-appendix-pitfalls-cleanup-backlog.md
+    back-matter/
+      01-appendix-pitfalls-cleanup-backlog.md
 ```

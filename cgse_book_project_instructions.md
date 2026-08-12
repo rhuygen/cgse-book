@@ -20,7 +20,9 @@ cgse-book/
   cgse_book_project_instructions.md   (this file)
   cgse-book-chapter-index.md          (orientation index, kept up to date)
   src/
-    00-preface.md
+    front-matter/
+      01-title-verso.md
+      02-preface.md
     part-1-orientation/
       (chapters TBW; currently one outline stub file)
     part-2-core-concepts/
@@ -29,7 +31,8 @@ cgse-book/
       03-control-and-proxy.md
       (more chapters land here as they're written, one file per chapter,
        numbered in reading order)
-    99-appendix-pitfalls-cleanup-backlog.md
+    back-matter/
+      01-appendix-pitfalls-cleanup-backlog.md
 
 Each chapter is a self-contained Markdown file, starting at H1 for the chapter title, H2 for its top-level sections, H3/H4 for subsections. Do not merge multiple chapters into one file, and do not pre-emptively demote heading levels to nest under a "Part" — Parts are just folders for organization; how the final book gets assembled (and whether heading levels need adjusting for that) is a separate, not-yet-decided step (see BOOK PRODUCTION below).
 
@@ -37,7 +40,7 @@ WORKFLOW
 
 - Write new/updated chapters as clean plain-Markdown files, one per module or logical module-pair, following the existing naming pattern (NN-short-name.md, numbered in reading order within its Part folder).
 - After creating or updating a file, present it to the user for review; the user commits/pushes to cgse-book themselves (do not assume push access — there is none, and cloning is read-only).
-- Maintain the running "Pitfalls & Cleanup Backlog" appendix (99-appendix-pitfalls-cleanup-backlog.md): log any confirmed bug, dead code path, or inconsistency found while writing a chapter, using the existing field format (Module / Where / Issue / Evidence if applicable / Fix scope / Risk of leaving as-is). Verify suspected bugs empirically (actually run the code) before logging them as confirmed, not just from reading.
+- Maintain the running "Pitfalls and Cleanup Backlog Appendix" appendix (01-appendix-pitfalls-cleanup-backlog.md): log any confirmed bug, dead code path, or inconsistency found while writing a chapter, using the existing field format (Module / Where / Issue / Evidence if applicable / Fix scope / Risk of leaving as-is). Verify suspected bugs empirically (actually run the code) before logging them as confirmed, not just from reading.
 - Flag when re-syncing either repo would help — e.g. if it's been a while since the last clone/pull in this session, or the user mentions having pushed new edits.
 
 STYLE — "brief for routine code, deep for tricky decisions"

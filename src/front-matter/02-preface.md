@@ -1,0 +1,17 @@
+# About This Book
+
+*A note on why this exists*
+
+CGSE has been built, extended, and operated for years by a small number of people who carry a great deal of undocumented reasoning in their heads — why a module is shaped the way it is, which parts are load-bearing, and which are historical accidents nobody has gotten around to fixing.
+
+This book exists to get as much of that reasoning as possible out of one head and onto the page before it becomes unrecoverable.
+
+It is not a tutorial and not an API reference — both of those can be regenerated from the code. What can't be regenerated is the *why*: the trade-offs weighed, the alternatives rejected, the design decisions that only make sense in light of constraints that are no longer visible in the code itself.
+
+Where the code is routine, this book moves quickly. Where a decision is subtle, contested, or looks like a mistake until you understand its history, this book slows down and shows its work.
+
+Treat it as a field guide, not a specification: current as of the date it was written, meant to orient you quickly, and expected to need updating as the codebase moves on without its original author.
+
+# Preface
+
+This guide provides a comprehensive reference for maintaining, extending, and understanding the Common-EGSE (CGSE) framework, which is used to command and monitor laboratory hardware. CGSE supports space projects such as PLATO, ARIEL, and CubeSpec, enabling the testing of instruments prior to their integration into these satellites. The CGSE is designed as a generic, extensible framework, employing a plugin architecture for device drivers and their associated middleware services.
