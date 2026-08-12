@@ -16,11 +16,11 @@ Test facility software accumulates configuration values from day one, and if you
 
 CGSE draws the line along one axis: **how often does the value change, and who changes it?**
 
-| Kind       | Changes...                                           | Example                                                                              | Where it lives                                                           |
-| ---------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
-| `CONSTANT` | Never, without a code change                         | `LOG_FORMAT_DEFAULT`, a physical constant, a protocol magic number                   | A module-level name in the `.py` file                                    |
-| `Settings` | Per site / per deployment, but not during a test run | `SSH_SERVER`, `RMAP_BASE_ADDRESS`, log format overrides                              | `settings.yaml`, shipped with the package, optionally overridden locally |
-| `Setup`    | Per test, per campaign, sometimes per session        | which hexapod ID is connected, its calibration file, the device class to instantiate | A `Setup` YAML file with a unique ID, managed like data, not like code   |
+| Kind | Changes... | Example | Where it lives |
+| -------------- | ------------------------ | ---------------------------------- | ---------------------------- |
+| `CONSTANT` | Never, without a code change | `LOG_FORMAT_DEFAULT`, a physical constant, a protocol magic number | A module-level name in the `.py` file |
+| `Settings` | Per site / per deployment, but not during a test run | `SSH_SERVER`, `RMAP_BASE_ADDRESS`, log format overrides | `settings.yaml`, shipped with the package, optionally overridden locally |
+| `Setup` | Per test, per campaign, sometimes per session | which hexapod ID is connected, its calibration file, the device class to instantiate | A `Setup` YAML file with a unique ID, managed like data, not like code |
 
 The rule of thumb we use in code review:
 
@@ -299,14 +299,14 @@ gse:
 
 and accessing `setup.gse.hexapod.device` doesn't return the *string* `"class//egse.hexapod.symetrie.puna.PunaSimulator"` — it imports that class, instantiates it, and returns the live object. This is implemented via `navdict`'s directive registry (`register_directive`), and `egse/setup.py` registers two CGSE-specific directives on top of whatever `navdict` provides out of the box. When you access a Setup value that begins with a special prefix, navdict automatically processes it:
 
-| Prefix       | Behavior                                  | Example                                                                                             |
-| ------------ | ----------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `class//`    | Instantiate and return the class object   | `device: "class//egse.hexapod.symetrie.puna.PunaSimulator"` → returns a live PunaSimulator instance |
-| `factory//`  | Load module, call its `create()` method   | `spline: factory//my.package.calibration.spline` → calls `spline.create()`, returns result          |
-| `csv//`      | Load CSV file, return as numpy array      | `coeff: "csv//calibration/gain_20250101.csv"` → numpy array of coefficients                         |
-| `pandas//`   | Load CSV file, return as pandas DataFrame | `trends: "pandas//historical_data.csv"`                                                             |
-| `yaml//`     | Load YAML file, return as dict            | `reference: "yaml//reference_frames.yaml"`                                                          |
-| `int-enum//` | Dynamically create an Enum                | `states: "int-enum//enum.StateType"` → enum.StateType class                                         |
+| Prefix | Behavior | Example |
+| --------------- | --------------------------------- | ---------------------------------------------------- |
+| `class//` | Instantiate and return the class object | `device: "class//egse.hexapod.symetrie.puna.PunaSimulator"` → returns a live PunaSimulator instance |
+| `factory//` | Load module, call its `create()` method | `spline: factory//my.package.calibration.spline` → calls `spline.create()`, returns result |
+| `csv//` | Load CSV file, return as numpy array | `coeff: "csv//calibration/gain_20250101.csv"` → numpy array of coefficients |
+| `pandas//` | Load CSV file, return as pandas DataFrame | `trends: "pandas//historical_data.csv"` |
+| `yaml//` | Load YAML file, return as dict | `reference: "yaml//reference_frames.yaml"` |
+| `int-enum//` | Dynamically create an Enum | `states: "int-enum//enum.StateType"` → enum.StateType class |
 
 Files are resolved relative to the configuration data location (from `<PROJECT>_CONF_DATA_LOCATION` environment variable).
 
