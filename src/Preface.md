@@ -1,0 +1,3 @@
+## Preface
+This guide provides a comprehensive reference for maintaining, extending, and understanding the Common-EGSE (CGSE) framework, which is used to command and monitor laboratory hardware. CGSE supports space projects such as PLATO, ARIEL, and CubeSpec, enabling the testing of instruments prior to their integration into these satellites. The CGSE is designed as a generic, extensible framework, employing a plugin architecture for device drivers and their associated middleware services.
+
