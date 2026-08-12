@@ -31,7 +31,7 @@ A full skeleton was scaffolded on 2026-08-12, covering Parts I–IV (orientation
 - Ch. 7 `07-protocol-and-command.md` — `egse/protocol.py`, `egse/command.py`
 - Ch. 8 `08-mixin.md` — `egse/mixin.py`
 - Ch. 9 `09-dummy.md` — `egse/dummy.py`, the worked end-to-end example
-- Ch. 10 `10-registry.md` — `egse/registry/` (backend, client, server, service)
+- Ch. 10 `10-registry.md` — `egse/registry/client.py`, `egse/registry/service.py` — the registry as design/API (client-side registration and discovery); the deployed-service side (`server.py`, `backend.py`) is split out to Ch. 17 in Part IV, cross-referenced rather than duplicated
 
 **`src/part-3-common-utilities/`** — new Part, TBW, covering the remaining `cgse-common` modules in thematic (not 1:1) chapters:
 - Ch. 11 `01-device-communication.md` — `device.py`, `socketdevice.py`, `scpi.py`
@@ -41,14 +41,15 @@ A full skeleton was scaffolded on 2026-08-12, covering Parts I–IV (orientation
 - Ch. 15 `05-logging-errors-diagnostics.md` — `log.py`, `exceptions.py`, `dicts.py`, `version.py`
 - Ch. 16 `06-odds-and-ends.md` — `bits.py`, `calibration.py`, `counter.py`, `config.py`, `resource.py`, `plugin.py`, `obsid.py`, `randomwalk.py`, `reload.py`
 
-**`src/part-4-core-services/`** — new Part, TBW, one control-server-shaped service per chapter (or a closely related pair):
-- Ch. 17 `01-storage-manager.md` — `egse/storage/*`
-- Ch. 18 `02-configuration-manager.md` — `egse/confman/*`, `egse/cm_acs/*`, `egse/serialization.py`
-- Ch. 19 `03-process-manager.md` — `egse/procman/*`
-- Ch. 20 `04-log-server-and-notifications.md` — `egse/logger/*`, `egse/listener.py`, `egse/connect.py`
-- Ch. 21 `05-metrics-and-notification-hubs.md` — `egse/metricshub/*`, `egse/notifyhub/*`
-- Ch. 22 `06-monitoring-observation-async-servers.md` — `egse/monitoring.py`, `egse/observation.py`, `egse/async_control.py`, `egse/async_dummy.py`, `egse/async_temp.py`, `egse/temperature_profile.py`, `egse/_setup_core.py`
-- Ch. 23 `07-the-cgse-cli.md` — `cgse_core/_start.py`, `_status.py`, `_stop.py`, `cgse_explore.py`, `cgse_core/services.py`, `egse/services.py`
+**`src/part-4-core-services/`** — new Part, TBW, one control-server-shaped service per chapter (or a closely related pair). Opens with the Registry Service, since every other service here registers itself with it on startup:
+- Ch. 17 `01-registry-service.md` — `egse/registry/server.py`, `egse/registry/backend.py` — the registry as a deployed service (backend choice, startup ordering, operations); split from Ch. 10's design/API treatment, cross-referenced not duplicated
+- Ch. 18 `02-storage-manager.md` — `egse/storage/*`
+- Ch. 19 `03-configuration-manager.md` — `egse/confman/*`, `egse/cm_acs/*`, `egse/serialization.py`
+- Ch. 20 `04-process-manager.md` — `egse/procman/*`
+- Ch. 21 `05-log-server-and-notifications.md` — `egse/logger/*`, `egse/listener.py`, `egse/connect.py`
+- Ch. 22 `06-metrics-and-notification-hubs.md` — `egse/metricshub/*`, `egse/notifyhub/*`
+- Ch. 23 `07-monitoring-observation-async-servers.md` — `egse/monitoring.py`, `egse/observation.py`, `egse/async_control.py`, `egse/async_dummy.py`, `egse/async_temp.py`, `egse/temperature_profile.py`, `egse/_setup_core.py`
+- Ch. 24 `08-the-cgse-cli.md` — `cgse_core/_start.py`, `_status.py`, `_stop.py`, `cgse_explore.py`, `cgse_core/services.py`, `egse/services.py`
 
 ## Running appendix
 
@@ -87,13 +88,14 @@ cgse-book/
       05-logging-errors-diagnostics.md            (Ch. 15, TBW)
       06-odds-and-ends.md                         (Ch. 16, TBW)
     part-4-core-services/
-      01-storage-manager.md                       (Ch. 17, TBW)
-      02-configuration-manager.md                 (Ch. 18, TBW)
-      03-process-manager.md                       (Ch. 19, TBW)
-      04-log-server-and-notifications.md          (Ch. 20, TBW)
-      05-metrics-and-notification-hubs.md         (Ch. 21, TBW)
-      06-monitoring-observation-async-servers.md  (Ch. 22, TBW)
-      07-the-cgse-cli.md                          (Ch. 23, TBW)
+      01-registry-service.md                      (Ch. 17, TBW)
+      02-storage-manager.md                       (Ch. 18, TBW)
+      03-configuration-manager.md                 (Ch. 19, TBW)
+      04-process-manager.md                       (Ch. 20, TBW)
+      05-log-server-and-notifications.md          (Ch. 21, TBW)
+      06-metrics-and-notification-hubs.md         (Ch. 22, TBW)
+      07-monitoring-observation-async-servers.md  (Ch. 23, TBW)
+      08-the-cgse-cli.md                          (Ch. 24, TBW)
     back-matter/
       01-appendix-pitfalls-cleanup-backlog.md
 ```

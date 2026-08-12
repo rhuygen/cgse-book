@@ -1,4 +1,4 @@
-# Chapter 17 The Storage Manager
+# Chapter 18 The Storage Manager
 
 *Where all the data coming off a test setup ends up.*
 

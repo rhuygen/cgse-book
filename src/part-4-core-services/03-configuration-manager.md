@@ -1,4 +1,4 @@
-# Chapter 18 The Configuration Manager, Two Generations
+# Chapter 19 The Configuration Manager, Two Generations
 
 *`confman` and its async rewrite, `cm_acs`.*
 

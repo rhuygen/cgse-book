@@ -1,4 +1,4 @@
-# Chapter 20 The Log Server and Listener Notifications
+# Chapter 21 The Log Server and Listener Notifications
 
 *Centralized logging, and how components tell each other things changed.*
 

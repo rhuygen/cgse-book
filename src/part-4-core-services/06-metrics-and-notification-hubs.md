@@ -1,4 +1,4 @@
-# Chapter 21 Metrics Hub and Notification Hub
+# Chapter 22 Metrics Hub and Notification Hub
 
 *Two async services for two kinds of fan-out: measurements, and events.*
 
@@ -18,7 +18,7 @@ TBW.
 
 ## 3. The Notification Hub
 
-`notifyhub/server.py`, `notifyhub/client.py`, and `notifyhub/services.py`: event-based messaging, and how it differs in purpose from the Listener mechanism in Chapter 20.
+`notifyhub/server.py`, `notifyhub/client.py`, and `notifyhub/services.py`: event-based messaging, and how it differs in purpose from the Listener mechanism in Chapter 21.
 
 TBW.
 

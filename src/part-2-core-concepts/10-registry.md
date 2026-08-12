@@ -6,15 +6,17 @@ Modules: `egse/registry/backend.py`, `egse/registry/client.py`, `egse/registry/s
 
 Every control server discussed so far has been reachable at a well-known, statically configured port. This chapter covers the service registry, deliberately placed last in the Part II arc so its value is legible by contrast with the static-port model already established in Chapters 6 through 9.
 
+This chapter stays at the level of design and API — what the registry is for, and how `ControlServer` and `Proxy` use it. Running the registry itself as a deployed service (backend choice, startup ordering, operations) is covered separately in Chapter 17, which opens Part IV precisely because every other service in that Part depends on the registry being up first.
+
 ## 1. Why a Registry, and Why It Comes Last
 
 What problem dynamic discovery solves that static ports don't, and why understanding the static model first makes the registry's design easier to motivate.
 
 TBW.
 
-## 2. Registry Server and Backend
+## 2. How Registration and Discovery Work
 
-The registry server and its pluggable backend abstraction.
+The registration/discovery protocol from the API's point of view — what a client sends, what it gets back — without yet getting into how the server backing that API is deployed or configured (Chapter 17).
 
 TBW.
 

@@ -1,4 +1,4 @@
-# Chapter 22 Monitoring, Observations and the Async Control Server
+# Chapter 23 Monitoring, Observations and the Async Control Server
 
 *What operators watch while a test runs, and an async take on Chapter 6's control server.*
 
