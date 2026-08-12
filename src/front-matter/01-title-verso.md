@@ -10,6 +10,6 @@ Source code excerpts are drawn from the CGSE repository at github.com/IvS-KULeuv
 
 This manuscript is maintained as plain Markdown at github.com/rhuygen/cgse-book.
 
-Written in collaboration with Claude (Anthropic), a co-author throughout the manuscript; see Acknowledgments.
+Written in collaboration with Claude Code (Anthropic); see Acknowledgments.
 
 Typeset with Pandoc.
