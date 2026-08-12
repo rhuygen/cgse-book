@@ -10,7 +10,6 @@ This chapter answers that question by walking through the two modules that imple
 
 Read this chapter as the template for the rest of the book: for every module we cover later, we'll ask the same three questions — what problem is this solving, what did we decide and why, and where are the sharp edges — but we won't repeat the reasoning about *when to use Settings vs Setup vs a constant*. That reasoning lives here, once, and everything downstream refers back to it.
 
-
 ## 1. The Problem of Three Very Different Kinds of Configuration
 
 Test facility software accumulates configuration values from day one, and if you don't deliberately separate *kinds* of configuration, they all end up in the same place — usually scattered across module-level constants, `.ini` files, and someone's personal `config.py` that nobody else knows exists. Three years into your project, that becomes unmanageable.
@@ -33,18 +32,7 @@ That last point is the one that trips people up: `Setup` is **not** "the more dy
 
 Keeping this distinction sharp is also what keeps `Settings.load()` fast and side-effect-free (safe to call from anywhere, including import time) while `Setup` loading is explicitly a stateful operation with a global "current setup" context. Blurring the two would have made one of them slow and the other one unsafe.
 
-**Settings vs. Setup vs. Environment Variables:**
-
-**TBD — merge the following with the previous paragraphs**
-
-The distinction between Settings and Setup is crucial and often confused. Remember: **Settings are static, Setup is dynamic.**
-
-- **Settings** `egse.settings.Settings`) — constants, IP addresses, port numbers, system definitions, equipment types, hardware identifiers. Static and change infrequently (only when the system or network is reconfigured). Distributed with the software, with local overrides via environment variable. Examples: `COMMANDING_PORT`, `HOSTNAME`, `MAX_LOG_FILES`, `SERVICE_TYPE`, `DEVICE_NAME`, `MAC_ADDRESS`.
-- **Setup** `egse.setup.Setup`) — configuration items, conversion coefficients and tables, device identification and tuning, everything that defines the system *for this specific test or mission*. Changes frequently during a test campaign as calibration is improved or hardware is swapped. Kept under version control in Git, but specific to each campaign/mission. Examples: calibration curves, SUT (System Under Test) parameters, reference frames, which devices are online, gain coefficients.
-- **Environment Variables** `.env` + `python-dotenv`) — secrets and deployment metadata, never checked in. Only the `.env.example` template is checked in. Examples: database passwords, API keys, external service URLs, `PROJECT` name, `LOCAL_SETTINGS` path.
-
-The rule of thumb: If a value is test-specific or changes frequently, it belongs in Setup. If it's a secret, use `.env`. If it's a system constant that's shipped with the code, it's a Setting.
-
+**A note on environment variables:** they show up twice in this framework, for two unrelated reasons, and it's worth not conflating them here. `egse.env` resolves a fixed set of `<PROJECT>_`-prefixed OS environment variables (`DATA_STORAGE_LOCATION`, `CONF_DATA_LOCATION`, `LOCAL_SETTINGS`, etc.) — these are *locations*, not secrets, and `LOCAL_SETTINGS` in particular is how a site points `Settings` at its override file (Section 2.7). Separately, `egse.env.load_dotenv()` loads an actual `.env` file for genuine secrets (database passwords, API keys) that must never be checked in. Both mechanisms live in `egse/env.py`, covered in full in Chapter 5.
 
 ## 2. `egse/settings.py`
 
@@ -247,7 +235,7 @@ The output includes a "Memoized locations" list showing which YAML files were ac
 
 ### 2.9 Common Patterns
 
-**Dynamic port allocation:** Set `PORT: 0` in your Settings YAML file; the OS then assigns an ephemeral port. Example: a control server reads `settings.COMMANDING_PORT = 0`, the OS assigns port 6920, and the server registers `service_type="MYDEVICE", port=6920` with the service registry.
+**Dynamic port allocation:** Set `PORT: 0` in your Settings YAML file; the OS then assigns an ephemeral port. Example: a control server reads `settings.COMMANDING_PORT = 0`, the OS assigns port 6920, and the server registers `service_type="MYDEVICE", port=6920` with the service registry (`reg_cs`).
 
 Clients then call `registry.discover_service("MYDEVICE")` to get the actual port. This decouples client config from server config. This is especially useful for device drivers where control servers should not allocate fixed port numbers for their services. Dynamically allocated ports are also used for testing (multiple test runs don't collide on ports).
 
@@ -258,7 +246,6 @@ Clients then call `registry.discover_service("MYDEVICE")` to get the actual port
 ### 2.10 What we deliberately left out of `Settings`
 
 No validation against a schema, no type coercion beyond what YAML gives you, no notion of "required" keys. Any of these would be reasonable additions in isolation, but `Settings` is used by every package in the ecosystem, including third-party device packages we don't control the release cycle of. A stricter contract here would mean a schema change in `cgse-common` could break settings loading for a device package that hasn't been touched in two years. The looseness is the feature, not a gap — the cost of that looseness (a typo'd key silently returns `KeyError` later, at the point of use, rather than at load time) is one we've accepted and haven't needed to revisit.
-
 
 ## 3. `egse/setup.py`
 
@@ -274,8 +261,6 @@ If `Settings` answers "how is this site configured," `Setup` answers "what was p
 - It needs a **notion of "the current one"**, because test scripts, GUIs, and control servers all need to agree on which Setup is active right now without explicitly passing it as a parameter through every function call.
 
 Each of those four requirements maps onto a concrete piece of the implementation below.
-
-The Setup is the complete configuration for a specific test, mission, or observation run. Where Settings are static system constants, Setup is mutable test-specific state — hardware identifiers, calibration coefficients, reference frames, conversion functions, device objects, etc. Setups change frequently during a campaign as calibration improves or hardware is swapped; they are kept under version control.
 
 ### 3.2 Built on `navdict`, not reinvented
 
@@ -587,4 +572,4 @@ This is also, not coincidentally, why `Settings.load()` is safe to call at impor
 
 For every module going forward, we'll follow this shape: the problem that forced the module to exist as a separate thing, the two or three decisions that would look arbitrary without explanation, the pieces of code that look like magic or dead weight until you know the story behind them, and — explicitly — what was deliberately left out and why. Performance notes appear where we actually measured something (Section 2.4's memoization, Section 3.3's repeated-access cost), not as a boilerplate section when there's nothing to say.
 
-*(Next:* `egse/env.py`*, the module both* `Settings` *and* `Setup` *lean on for every environment-variable and file-location decision — a natural continuation, since half of this chapter's "why" answers bottomed out in "because of how* `env.py` *resolves* `<PROJECT>_...` *variables.")*
+*(Chapter 5 covers* `egse/env.py` *in full — the module both* `Settings` *and* `Setup` *lean on for every environment-variable and file-location decision. Several of this chapter's "why" answers bottom out in "because of how* `env.py` *resolves* `<PROJECT>_...` *variables"; that chapter is where the mechanism itself is explained.)*
