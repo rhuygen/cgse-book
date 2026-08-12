@@ -68,6 +68,7 @@ cgse-book/
     front-matter/
       01-title-verso.md
       02-preface.md
+      03-acknowledgments.md
     part-1-orientation/
       01-introduction-and-philosophy.md          (Ch. 1, TBW)
       02-architecture-at-a-glance.md             (Ch. 2, TBW)
