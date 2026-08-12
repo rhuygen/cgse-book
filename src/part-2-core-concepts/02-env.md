@@ -1,6 +1,8 @@
-# Chapter 5 `egse/env.py`
+# Chapter 5 Environments
 
 *Where "where does it live" gets decided.*
+
+Caveat: this does not include Python virtual environments, but rather the environment the process is running in and environment variables.
 
 ## Why this chapter follows Settings & Setup
 

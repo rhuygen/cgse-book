@@ -1,4 +1,4 @@
-# Chapter 10 `egse/registry/`
+# Chapter 10 The Service Registry
 
 *From static ports to dynamic discovery.*
 

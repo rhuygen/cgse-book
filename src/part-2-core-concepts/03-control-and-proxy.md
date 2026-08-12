@@ -1,4 +1,4 @@
-# Chapter 6 `control.py` and `proxy.py`
+# Chapter 6 Control Servers and Proxies
 
 *The client/server foundation.*
 

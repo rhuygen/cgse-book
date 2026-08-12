@@ -1,4 +1,4 @@
-# Chapter 8 `mixin.py`
+# Chapter 8 Mixin and Dynamics
 
 *Wiring the command dictionary into client classes.*
 

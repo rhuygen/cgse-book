@@ -1,4 +1,4 @@
-# Chapter 23 The `cgse` Command-Line Interface
+# Chapter 23 The CGSE Command-Line Interface
 
 *Starting, stopping, and exploring the running system.*
 

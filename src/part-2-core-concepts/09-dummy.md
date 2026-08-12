@@ -1,4 +1,4 @@
-# Chapter 9 `dummy.py`
+# Chapter 9 A Dummy Example
 
 *A worked example, start to finish.*
 

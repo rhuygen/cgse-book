@@ -1,4 +1,4 @@
-# Chapter 7 `protocol.py` and `command.py`
+# Chapter 7 Protocols and Commanding
 
 *How a method call becomes a command, and a command becomes a wire request.*
 
