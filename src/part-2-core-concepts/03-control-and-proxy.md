@@ -4,7 +4,7 @@
 
 ## Why this chapter follows Settings, Setup, and env
 
-Chapters X and Y covered *what* configuration exists and *where* it lives. This chapter is about what actually *uses* that configuration at runtime: every device in a Setup — a hexapod, a temperature controller, a power supply — is operated through a **Control Server** process that owns the physical connection to the hardware, and every test script or GUI that wants to talk to that device does so through a **Proxy** object that looks, to calling code, almost exactly like the device itself.
+Chapters 4 and 5 covered *what* configuration exists and *where* it lives. This chapter is about what actually *uses* that configuration at runtime: every device in a Setup — a hexapod, a temperature controller, a power supply — is operated through a **Control Server** process that owns the physical connection to the hardware, and every test script or GUI that wants to talk to that device does so through a **Proxy** object that looks, to calling code, almost exactly like the device itself.
 
 `egse/control.py` (in `cgse-core`) defines `ControlServer`, the abstract base every device control server inherits from. `egse/proxy.py` defines `Proxy` (and its relatives), the client-side counterpart. Between them, they define the one architectural pattern that essentially all of CGSE's runtime behavior is built on top of. Everything from here on — device drivers, the GUI clients, the Storage and Configuration Managers themselves (which are *also* `ControlServer` subclasses, Section 2) — assumes this chapter's vocabulary.
 
