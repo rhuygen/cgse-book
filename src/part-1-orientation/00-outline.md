@@ -1,4 +1,4 @@
-#  Part I — Orientation
+# Part I Orientation
 
 ## 1. Introduction & Philosophy
 

@@ -1,4 +1,6 @@
-# Chapter X — Settings and Setup: Where Configuration Lives
+# Chapter 4 Settings and Setup
+
+*Where configuration lives.*
 
 ## Why this chapter comes early
 
@@ -8,9 +10,8 @@ This chapter answers that question by walking through the two modules that imple
 
 Read this chapter as the template for the rest of the book: for every module we cover later, we'll ask the same three questions — what problem is this solving, what did we decide and why, and where are the sharp edges — but we won't repeat the reasoning about *when to use Settings vs Setup vs a constant*. That reasoning lives here, once, and everything downstream refers back to it.
 
----
 
-## 1. The problem: three very different kinds of "configuration"
+## 1. The Problem of Three Very Different Kinds of Configuration
 
 Test facility software accumulates configuration values from day one, and if you don't deliberately separate *kinds* of configuration, they all end up in the same place — usually scattered across module-level constants, `.ini` files, and someone's personal `config.py` that nobody else knows exists. Three years into your project, that becomes unmanageable.
 
@@ -44,9 +45,10 @@ The distinction between Settings and Setup is crucial and often confused. Rememb
 
 The rule of thumb: If a value is test-specific or changes frequently, it belongs in Setup. If it's a secret, use `.env`. If it's a system constant that's shipped with the code, it's a Setting.
 
----
 
-## 2. `egse/settings.py` — configuration that ships with the code
+## 2. `egse/settings.py`
+
+*Configuration that ships with the code.*
 
 ### 2.1 What it needs to solve
 
@@ -133,7 +135,7 @@ PyYAML's `SafeLoader`, out of the box, only recognizes floats written with a dec
 
 The fix replaces the implicit resolver for the float tag with a broader regex (adapted from a well-known PyYAML issue) so that `5e-6`, `.5e-6`, `+5e-6` and friends parse as floats everywhere `SAFE_LOADER` is used — which, because `SAFE_LOADER` is patched at module level, means everywhere in the codebase that loads YAML through this module, not just in `Settings`. This is a case where the fix has to sit at the "load YAML" chokepoint rather than in every call site, because there's no way for a call site to know it's about to receive a mis-typed string instead of a float.
 
-### 2.4 Memoization: `read_configuration_file`
+### 2.4 Memoization in `read_configuration_file`
 
 Settings are memoized by filename; calling `Settings.load()` again doesn't re-read the YAML file from disk. This is by design — settings are static. If you do need to reload (e.g. in a long-running daemon where the local settings file was edited), call `Settings.load(force=True)`. However, this does *not* automatically propagate to code that cached settings in local variables or class instance variables. **Be cautious**: if a part of your app caches `self.port = settings.COMMANDING_PORT` at \_\_**init**\_\_, a later `Settings.load(force=True)` won't update `self.port`. In practice, avoid reloading; restart the process instead.
 
@@ -165,7 +167,7 @@ Notice that `Settings` is never instantiated — every method is a `@staticmetho
 
 This split — "the loader is a class, the result is a dict" — is a pattern you'll see again in `Setup` (Section 3), but with an important difference explained below: `Setup` needs a *richer* returned object than a plain dict, because Setup values can trigger side effects on access (see `class//`, `csv//` in Section 3.3), so `Setup` couldn't get away with returning something as thin as `attrdict`.
 
-### 2.6 `Settings.load()` — the three call shapes
+### 2.6 The Three Call Shapes of `Settings.load()`
 
 ```python
 from egse.settings import Settings
@@ -188,8 +190,9 @@ The load method itself handles the three call shapes in three different code bra
 
 ```python
 @classmethod
-def load(cls, group_name=None, filename="settings.yaml", location=None, *,
-         add_local_settings=True, force=False) -> attrdict:
+def load(
+    cls, group_name=None, filename="settings.yaml", location=None, *, add_local_settings=True, force=False
+) -> attrdict:
     if group_name:
         return cls._load_group(group_name, add_local_settings=add_local_settings, force=force)
     elif location:
@@ -227,7 +230,7 @@ Keithley Control Server:
     COMMANDING_PORT: 6920
 ```
 
-### **2.8 Debugging & Inspection**
+### 2.8 Debugging and Inspection
 
 ```bash
 # Print all loaded settings
@@ -242,7 +245,7 @@ python -m egse.settings --group "Keithley Control Server"
 
 The output includes a "Memoized locations" list showing which YAML files were actually loaded.
 
-### **2.9 Common Patterns**
+### 2.9 Common Patterns
 
 **Dynamic port allocation:** Set `PORT: 0` in your Settings YAML file; the OS then assigns an ephemeral port. Example: a control server reads `settings.COMMANDING_PORT = 0`, the OS assigns port 6920, and the server registers `service_type="MYDEVICE", port=6920` with the service registry.
 
@@ -256,9 +259,10 @@ Clients then call `registry.discover_service("MYDEVICE")` to get the actual port
 
 No validation against a schema, no type coercion beyond what YAML gives you, no notion of "required" keys. Any of these would be reasonable additions in isolation, but `Settings` is used by every package in the ecosystem, including third-party device packages we don't control the release cycle of. A stricter contract here would mean a schema change in `cgse-common` could break settings loading for a device package that hasn't been touched in two years. The looseness is the feature, not a gap — the cost of that looseness (a typo'd key silently returns `KeyError` later, at the point of use, rather than at load time) is one we've accepted and haven't needed to revisit.
 
----
 
-## 3. `egse/setup.py` — configuration that describes *this specific test*
+## 3. `egse/setup.py`
+
+*Configuration that describes this specific test.*
 
 ### 3.1 What's fundamentally different here
 
@@ -287,15 +291,15 @@ A Setup is typically loaded from a YAML file, navigated during a test run, and r
 from navdict import navdict
 from navdict.navdict import NavigableDict
 
-class Setup(NavigableDict):
-    ...
+
+class Setup(NavigableDict): ...
 ```
 
 This is a case where a piece of *generic* functionality (navigable, YAML-backed, dot-and-bracket-accessible dictionaries) was deliberately pulled out of CGSE into its own mission-agnostic library, precisely because it has no CGSE-specific behavior in it — the CGSE-specific part is everything `Setup` adds on top: setup IDs, the `class//`/`csv//` family of special values called *directives* (Section 3.3), site-aware file discovery, and the submit/load lifecycle.
 
 The `navdict` split is a good illustration of a general principle worth stating once, here, since it recurs across the codebase: **if a piece of code has no dependency on** `egse.env`**,** `egse.log`**, or any test-facility concept, that's a signal it belongs in its own package, not in** `cgse-common`**.** `cgse-common` is for things that are common *to CGSE*, not common to Python projects in general.
 
-### 3.3 Special values: the `class//`, `csv//`, `yaml//`, `pandas//`, `int-enum//` directives
+### 3.3 Special Value Directives (`class//`, `csv//`, `yaml//`, `pandas//`, `int-enum//`)
 
 This is the part of `Setup` most likely to look like magic to someone reading it for the first time, so it's worth being explicit about the mechanism and the motivation.
 
@@ -324,6 +328,7 @@ Files are resolved relative to the configuration data location (from `<PROJECT>_
 ```python
 def _load_csv(value: str, parent_location: Path | None, *args, **kwargs):
     from numpy import genfromtxt
+
     parts = value.rsplit("/", 1)
     [in_dir, fn] = parts if len(parts) > 1 else [None, parts[0]]
     csv_location = get_resource_location(parent_location, in_dir)
@@ -334,6 +339,7 @@ def _load_csv(value: str, parent_location: Path | None, *args, **kwargs):
     except TypeError as exc:
         raise ValueError(f"Couldn't load resource '{value}' from {csv_location}") from exc
     return content
+
 
 register_directive("csv", _load_csv)
 register_directive("pandas", _load_pandas)
@@ -417,7 +423,7 @@ Inheritance was chosen over composition (wrapping a `NavigableDict` inside a `Se
 
 Notice the `try/except AttributeError` pattern used twice here for copying "private attributes" (`_filename`, `_setup_id`) from an existing `NavigableDict` into the new `Setup`. This looks slightly unusual — most code would check `hasattr` or use `getattr(..., default)` — but `get_private_attribute` is a `navdict` API that raises when the attribute was never set, rather than returning `None`, so the `try/except` here is the correct idiom given that library's contract, not an inconsistency with the rest of the codebase's style.
 
-### 3.6 The "current Setup" context: `setup_ctx` and why it's a `ContextVar`
+### 3.6 The Current Setup Context (`setup_ctx` as a `ContextVar`)
 
 ```python
 setup_ctx: ContextVar[Setup | None] = ContextVar("setup", default=None)
@@ -457,12 +463,14 @@ A few decisions bundled into this one function:
 - **The rich-printed message after submission is a deliberate nudge, not decoration:**
 
 ```python
-rich.print(textwrap.dedent("""\
+rich.print(
+    textwrap.dedent("""\
     Saving setup to disk, a new setup identifier has been assigned.
     To finalize the submit, reload the setup:
 
     setup = load_setup()
-    """))
+    """)
+)
 ```
 
 Submitting a Setup and continuing to use the in-memory `setup` object you already had would silently work most of the time, but that object doesn't have the newly assigned `_setup_id` reflected consistently with what's on disk in every code path, and — more importantly — it isn't the object registered in `setup_ctx`. The explicit reminder exists because this was, in practice, a mistake people made before the message was added: submit, then keep working from the stale in-memory reference. This is worth flagging in the book precisely because it's a "brain fart" class of bug — not a logic error, a *forgot to reload* error — and the fix was social (tell the user) rather than technical (force a reload), because forcing a reload would have meant deciding unilaterally that the caller's reference should be invalidated, which is more surprising than a printed reminder.

@@ -1,14 +1,16 @@
-# Chapter Y — `egse/env.py`: Where "Where Does It Live" Gets Decided
+# Chapter 5 `egse/env.py`
+
+*Where "where does it live" gets decided.*
 
 ## Why this chapter follows Settings & Setup
 
-Chapter X kept saying some version of "the location comes from `egse.env`" — the local settings path, the configuration data location, the Setup files directory. This chapter is that other half: the module that turns two mandatory environment variables (`PROJECT`, `SITE_ID`) into every other location the CGSE needs, and the module that both `Settings` and `Setup` depend on for knowing *where on disk* to look.
+Chapter 4 kept saying some version of "the location comes from `egse.env`" — the local settings path, the configuration data location, the Setup files directory. This chapter is that other half: the module that turns two mandatory environment variables (`PROJECT`, `SITE_ID`) into every other location the CGSE needs, and the module that both `Settings` and `Setup` depend on for knowing *where on disk* to look.
 
-If Chapter X answered "what kind of configuration is this," this chapter answers "and once we know that, where does it physically live, on this machine, at this site, for this project."
+If Chapter 4 answered "what kind of configuration is this," this chapter answers "and once we know that, where does it physically live, on this machine, at this site, for this project."
 
 ---
 
-## 1. The problem: four test sites, one codebase, and no hardcoded paths allowed
+## 1. Four Test Sites, One Codebase, No Hardcoded Paths
 
 CGSE runs at multiple test sites (CSL, SRON, IAS, INTA) across multiple projects (PLATO, ARIEL, CubeSpec). The data storage root, the configuration repository, the log file location — none of these can be a constant in code, because the same code runs unmodified at every site. But they also can't just be "read `os.environ` wherever you need it," because:
 
@@ -20,7 +22,9 @@ CGSE runs at multiple test sites (CSL, SRON, IAS, INTA) across multiple projects
 
 ---
 
-## 2. The naming convention: two mandatory variables, five derived ones
+## 2. The Naming Convention
+
+*Two mandatory variables, five derived ones.*
 
 ```python
 MANDATORY_ENVIRONMENT_VARIABLES = ["PROJECT", "SITE_ID"]
@@ -71,7 +75,7 @@ for name in MANDATORY_ENVIRONMENT_VARIABLES:
 
 Missing `PROJECT` or `SITE_ID` at *import* time doesn't raise — it logs a warning and stores a `NoValue()` sentinel. This is deliberate: `import egse.env` (directly, or transitively through almost every other `egse` module) happens in contexts where the environment genuinely isn't fully configured yet — a fresh Python REPL for interactive debugging, a unit test that sets up its own environment inside the test body, a `--help` invocation of some CLI tool that doesn't actually need a Setup. Raising at import time would make `import egse.env` itself fail in all of these legitimate cases. The error is deferred to the moment a caller actually asks for a value that depends on the missing variable — that's what `_check_no_value()` does (Section 4.1) — because that's the point where "the environment isn't configured" actually becomes a real problem, not just a hypothetical one.
 
-### 3.3 The `_Env` class: a cache, not a re-implementation of `os.environ`
+### 3.3 The `_Env` Class as a Cache, Not a Re-Implementation of `os.environ`
 
 ```python
 class _Env:
@@ -94,7 +98,7 @@ class _Env:
 - Writing to `os.environ` matters because child processes (a control server spawning a subprocess, a script launched via `subprocess.run`) inherit `os.environ`, not this module's private cache. If `set_conf_data_location()` only updated `_env`, a subprocess would never see the change.
 - Reading from `_env` rather than `os.environ` directly is what makes `NoValue()` possible as a distinguishable "never set" sentinel (Section 3.4) — `os.environ.get(key)` would just return `None` for "not set," which collides with the `set_X(None)` convention for "explicitly clear this," described next.
 
-### 3.4 `NoValue`: a sentinel that isn't `None`, on purpose
+### 3.4 `NoValue` as a Sentinel That Isn't `None`, on Purpose
 
 ```python
 class NoValue:
@@ -120,6 +124,7 @@ def get_data_storage_location_env_name() -> str:
     project = _env.get("PROJECT")
     return f"{project}_DATA_STORAGE_LOCATION"
 
+
 def set_data_storage_location(location: str | Path | None):
     env_name = get_data_storage_location_env_name()
     if location is None:
@@ -131,6 +136,7 @@ def set_data_storage_location(location: str | Path | None):
         warnings.warn(f"The location you provided ... doesn't exist: {location}.")
     os.environ[env_name] = str(location)
     _env.set("DATA_STORAGE_LOCATION", str(location))
+
 
 def get_data_storage_location(site_id: str = None) -> str:
     project = _env.get("PROJECT")
@@ -147,7 +153,7 @@ Every one of the five known variables follows this exact three-function shape: `
 
 What *does* deserve attention is the tail end of `get_data_storage_location`: it silently appends `site_id` to the configured root if the root doesn't already end with it. **This makes the data storage location site-specific by construction** — you cannot get a `get_data_storage_location()` result that *isn't* scoped to a site, even if the environment variable was configured as a bare shared root. This is a guard against a real class of mistake: a shared root configured once and reused across two sites would silently mix data from CSL and SRON in the same folder tree.
 
-### 4.2 Fallback chaining: only one location is really mandatory
+### 4.2 Fallback Chaining, Where Only One Location Is Really Mandatory
 
 `get_conf_data_location()` and `get_log_file_location()` don't require their own environment variable to be set at all — if `<PROJECT>_CONF_DATA_LOCATION` isn't set, the function falls back to `get_data_storage_location() + "/conf"`; similarly, log file location falls back to `.../log`. Only `<PROJECT>_DATA_STORAGE_LOCATION` (plus `PROJECT` and `SITE_ID` themselves) is truly mandatory — everything else has a sane, discoverable default derived from it.
 
@@ -157,13 +163,15 @@ This is a genuine usability decision for anyone setting up a new test site: you 
 
 ## 5. `CONF_REPO_LOCATION` is different in kind, not just in name
 
-Unlike the other four, `CONF_REPO_LOCATION` points at a **git working copy** (`~/git/{project}-conf` per the CLI's own `--doc` help text), not at a generic data folder — it's the repository that `plato-common-egse`/CGSE configuration data is version-controlled in, separate from the `CONF_DATA_LOCATION` which is where Setup YAML files are actually read from day to day. In practice, `CONF_DATA_LOCATION` for a site can simply *be* a path inside the `CONF_REPO_LOCATION` working copy — the repo is where the Setup files live under version control, and the data location is how code finds them, and they often overlap on disk. `Setup.get_path_of_setup_file()` (Chapter X, Section 3) branches explicitly on `has_conf_repo_location()` to decide whether to go through the extra checks in `_check_conditions_for_get_path_of_setup_file` (verifying the repo folder and the site's `data/<site>/conf` subfolder both exist) versus falling back to a simpler `get_conf_data_location()`-based path.
+Unlike the other four, `CONF_REPO_LOCATION` points at a **git working copy** (`~/git/{project}-conf` per the CLI's own `--doc` help text), not at a generic data folder — it's the repository that `plato-common-egse`/CGSE configuration data is version-controlled in, separate from the `CONF_DATA_LOCATION` which is where Setup YAML files are actually read from day to day. In practice, `CONF_DATA_LOCATION` for a site can simply *be* a path inside the `CONF_REPO_LOCATION` working copy — the repo is where the Setup files live under version control, and the data location is how code finds them, and they often overlap on disk. `Setup.get_path_of_setup_file()` (Chapter 4, Section 3) branches explicitly on `has_conf_repo_location()` to decide whether to go through the extra checks in `_check_conditions_for_get_path_of_setup_file` (verifying the repo folder and the site's `data/<site>/conf` subfolder both exist) versus falling back to a simpler `get_conf_data_location()`-based path.
 
 Which brings us to the one thing in this module that doesn't behave the way its name promises.
 
 ---
 
-## 6. A real bug, caught by reading the code and checking it: `has_conf_repo_location()`
+## 6. A Real Bug in `has_conf_repo_location()`
+
+*Caught by reading the code and checking it.*
 
 ```python
 def has_conf_repo_location() -> bool:
@@ -211,7 +219,7 @@ This is exactly the kind of thing this book exists to surface: not a crash, not 
 
 ---
 
-## 7. `load_dotenv()`: a narrow, deliberate override
+## 7. `load_dotenv()` as a Narrow, Deliberate Override
 
 ```python
 def load_dotenv():
@@ -234,7 +242,7 @@ The docstring also states a rule that's easy to violate by accident: *"don't use
 
 ---
 
-## 8. `env_var()`: the context manager for tests
+## 8. `env_var()`, the Context Manager for Tests
 
 ```python
 @contextlib.contextmanager
@@ -270,7 +278,9 @@ The docstring's one-line note — *"This context manager is different from the o
 
 ---
 
-## 9. `print_env()` and the `main()` CLI — diagnostics, briefly
+## 9. `print_env()` and the `main()` CLI
+
+*Diagnostics, briefly.*
 
 `print_env()` is a small, side-effect-free reporting function: it prints the current value of every known location, wrapped in `warnings.catch_warnings()` with warnings suppressed, because its whole purpose is to be a calm diagnostic printout, not to also emit every warning that the getters would normally raise for unset optional variables. It's used exactly once outside this module, in `Setup._check_conditions_for_get_path_of_setup_file`, as context dumped just before raising a `LookupError` — genuinely useful there, since a confusing environment-variable error is much less frustrating with a full printout of what *is* set alongside it.
 
@@ -287,10 +297,9 @@ One stray line at the bottom of `main()` is worth a one-line flag rather than a 
 
 A leftover question-to-self from an earlier cleanup, never resolved. Logged as **P-005** — not because it's harmful, but because "do we still use X" comments left in shipped code are exactly the kind of thing a departing architect should resolve explicitly rather than leave as an unanswered question for whoever reads it next.
 
----
 
 ## What carries forward
 
-The pattern from Chapter X holds: this module's "why" is almost entirely about *not* letting project/site variability leak into every call site, and about making the one unavoidable piece of global mutable state (`os.environ`) safe to reason about through a single cache with a real initialize-once lifecycle. The two real findings this chapter produced — `has_conf_repo_location`'s inverted-and-dead logic, and `env_var`'s missing `try/finally` — are exactly the kind of thing that "go deep on the tricky bits, verify rather than assume" is meant to catch, and both are now in the Pitfalls appendix with enough detail for a fix to be a quick, well-scoped PR.
+The pattern from Chapter 4 holds: this module's "why" is almost entirely about *not* letting project/site variability leak into every call site, and about making the one unavoidable piece of global mutable state (`os.environ`) safe to reason about through a single cache with a real initialize-once lifecycle. The two real findings this chapter produced — `has_conf_repo_location`'s inverted-and-dead logic, and `env_var`'s missing `try/finally` — are exactly the kind of thing that "go deep on the tricky bits, verify rather than assume" is meant to catch, and both are now in the Pitfalls appendix with enough detail for a fix to be a quick, well-scoped PR.
 
 *(Next: pivoting to* `cgse-core` *and the ZeroMQ-based control server architecture — a good moment to leave* `cgse-common`*, since everything from here on assumes the Settings/Setup/env foundation from this and the previous chapter, and starts building the client-server layer on top of it.)*

@@ -1,4 +1,6 @@
-# Chapter Z — `control.py` and `proxy.py`: The Client/Server Foundation
+# Chapter 6 `control.py` and `proxy.py`
+
+*The client/server foundation.*
 
 ## Why this chapter follows Settings, Setup, and env
 
@@ -8,9 +10,8 @@ Chapters X and Y covered *what* configuration exists and *where* it lives. This 
 
 We're covering this pair before the newer `egse/registry` module deliberately (see the closing note): understanding the "classic" model here first is what will make the registry's added value legible later, rather than the other way around.
 
----
 
-## 1. The problem: one process per device, many clients per process
+## 1. One Process per Device, Many Clients per Process
 
 A test facility has physical devices that can only safely be talked to by one thing at a time — you don't want a GUI and a test script independently opening a serial connection to the same hexapod. CGSE's answer is a strict separation:
 
@@ -21,14 +22,13 @@ This buys the two things a shared, hands-on test facility actually needs: exclus
 
 `ControlServer` is the shared machinery for the server side of that relationship, and it's reused far beyond individual device drivers: the **Storage Manager** and **Configuration Manager** — CGSE's own infrastructure services — are themselves `ControlServer` subclasses. The same request/reply, registration, and monitoring machinery that runs a hexapod control server runs the service that decides where housekeeping data gets written. That reuse is a strong signal of how central this one base class is.
 
----
 
 ## 2. Three sockets, three concerns
 
 ```python
-self.dev_ctrl_service_sock = self.zcontext.socket(zmq.REP)   # "how are you, what are your ports"
-self.dev_ctrl_mon_sock = self.zcontext.socket(zmq.PUB)        # periodic status/HK broadcast
-self.dev_ctrl_cmd_sock = self.zcontext.socket(zmq.REP)        # the actual device commands
+self.dev_ctrl_service_sock = self.zcontext.socket(zmq.REP)  # "how are you, what are your ports"
+self.dev_ctrl_mon_sock = self.zcontext.socket(zmq.PUB)  # periodic status/HK broadcast
+self.dev_ctrl_cmd_sock = self.zcontext.socket(zmq.REP)  # the actual device commands
 ```
 
 `ControlServer.__init__` sets up three distinct ZeroMQ sockets, each with a different pattern, because they solve three genuinely different problems:
@@ -45,9 +45,8 @@ self.poller.register(self.dev_ctrl_mon_sock, zmq.POLLIN)  # FIXME: I think this 
 
 This is left in the source as-is, and it's worth explaining *why* it's suspicious rather than just repeating the FIXME: `dev_ctrl_mon_sock` is a `PUB` socket — it only ever sends, never receives — so registering it for `POLLIN` (readability) in the poller is very likely inert: ZeroMQ shouldn't report a `PUB` socket as readable in any normal flow, meaning this line probably does nothing harmful, but also nothing useful. It's flagged in the Pitfalls appendix (P-007) as "verify and remove if confirmed inert" rather than fixed outright in this book, since removing a poller registration in a 24/7 running control server is exactly the kind of change you want backed by a deliberate test and a real deployment window, not a silent edit while writing documentation.
 
----
 
-## 3. `serve()`: a single-threaded reactor, not a thread per socket
+## 3. `serve()` as a Single-Threaded Reactor, Not a Thread per Socket
 
 ```python
 while True:
@@ -93,7 +92,7 @@ except KeyboardInterrupt:
 
 This is a deliberate operational policy, not a missing feature. A control server owns a live connection to physical hardware — if a `KeyboardInterrupt` were allowed to unwind the Python stack at an arbitrary point inside `serve()`'s loop, it could do so in the middle of a device command, skip `after_serve()`, skip storage manager de-registration, and leave sockets and the device connection in an undefined state. The `quit()` method (Section 3.2) and the `interrupted` flag give the loop a chance to reach the `break` at the top of the loop body on its own terms, run the cleanup sequence at the bottom of `serve()` in order (unregister from storage manager, run `after_serve()`, close every socket explicitly, deregister from the service registry, terminate the ZeroMQ context), and exit cleanly. `SIGTERM` (via `killer.term_signal_received`, from `egse.system.SignalCatcher`) is still honored — this isn't "ignore all signals," it's specifically "don't let an interactive Ctrl-C interrupt at an arbitrary instruction," while still allowing an orchestrated shutdown signal to be checked at a safe point in the loop.
 
-### 3.2 `schedule_task` / `handle_scheduled_tasks`: cooperative multitasking, explicitly
+### 3.2 `schedule_task` and `handle_scheduled_tasks` as Explicit Cooperative Multitasking
 
 ```python
 def schedule_task(self, callback: Callable, after: float = 0.0, when: Callable = None):
@@ -105,9 +104,8 @@ Given Section 3's single-thread constraint, `schedule_task` is how a device prot
 
 The reverse-then-pop-from-the-end pattern (`self.scheduled_tasks.reverse()` followed by `.pop()` in a `while` loop) is a slightly unusual way to process a list in original order while also being able to append newly-rescheduled tasks without disturbing the ones still to be processed in *this* pass — routine once you see the trick, not worth more than this one sentence.
 
----
 
-## 4. The abstract contract: four methods, one theme
+## 4. The Abstract Contract of Four Methods, One Theme
 
 ```python
 @abc.abstractmethod
@@ -120,24 +118,25 @@ def get_service_port(self) -> int: ...
 def get_monitoring_port(self) -> int: ...
 ```
 
-Every concrete control server must supply its protocol and its three ports. This is a small, deliberately narrow abstract contract — `ControlServer` doesn't force subclasses to structure their device commanding any particular way, only to be explicit about *how to reach this server at all*. And this is exactly where Chapter X's `CONSTANT`/`Settings`/`Setup` framework earns its keep in practice: a concrete implementation (e.g. the PUNA hexapod control server) typically implements these four methods as one-liners returning module-level names loaded once from `Settings.load(...)` at import time —
+Every concrete control server must supply its protocol and its three ports. This is a small, deliberately narrow abstract contract — `ControlServer` doesn't force subclasses to structure their device commanding any particular way, only to be explicit about *how to reach this server at all*. And this is exactly where Chapter 4's `CONSTANT`/`Settings`/`Setup` framework earns its keep in practice: a concrete implementation (e.g. the PUNA hexapod control server) typically implements these four methods as one-liners returning module-level names loaded once from `Settings.load(...)` at import time —
 
 ```python
 def get_commanding_port(self):
     return COMMANDING_PORT
 ```
 
-— because a commanding port is a textbook `Settings` value by Chapter X's own rule of thumb: it's fixed per site/deployment, not per test, and changing it means editing a YAML file, not the code.
+— because a commanding port is a textbook `Settings` value by Chapter 4's own rule of thumb: it's fixed per site/deployment, not per test, and changing it means editing a YAML file, not the code.
 
----
 
 ## 5. Registry integration and the `can_operate_without_registry()` policy hook
 
 ```python
 def register_service(self, service_type: str) -> None:
     self._service_id = self.registry.register(
-        name=self.service_name, host=get_host_ip() or "127.0.0.1",
-        port=get_port_number(self.dev_ctrl_cmd_sock), service_type=self.service_type,
+        name=self.service_name,
+        host=get_host_ip() or "127.0.0.1",
+        port=get_port_number(self.dev_ctrl_cmd_sock),
+        service_type=self.service_type,
         metadata={"service_port": ..., "monitoring_port": ...},
     )
     if self._service_id:
@@ -164,9 +163,8 @@ def can_operate_without_registry(self) -> bool:
 
 The override isn't "always tolerate a missing registry" — it's specifically "tolerate it *when this server's ports are statically configured in Settings rather than dynamically assigned* (a non-zero, explicitly set port, as opposed to `0`/OS-assigned)." That condition is the whole point: if a device's ports are fixed, well-known values from a YAML file, a client can in principle be told that endpoint directly and connect without ever asking the registry — so losing the registry is a degraded, not a broken, situation for that server. A server relying on OS-assigned (`0`) ports has no such fallback: without the registry, nobody could discover which port it ended up on, so for *that* server, a failed registration really is fatal. `can_operate_without_registry()` is a Template Method-style policy hook precisely because the right answer depends on a per-server fact (static vs. dynamic ports) that only the concrete subclass knows — `ControlServer` provides the mechanism (what to do with the answer) without hardcoding the policy (what the answer should be).
 
----
 
-## 6. `is_control_server_active()`: a raw, low-level ping, separate from the Proxy
+## 6. `is_control_server_active()` as a Raw, Low-Level Ping, Separate From the Proxy
 
 ```python
 def is_control_server_active(endpoint: str = None, timeout: float = 0.5) -> bool:
@@ -184,15 +182,13 @@ def is_control_server_active(endpoint: str = None, timeout: float = 0.5) -> bool
 
 This module-level function duplicates, in miniature, what `Proxy.ping()` does (Section 8) — open a `REQ` socket, send `"Ping"`, expect `"Pong"` back within a timeout. It exists as a standalone function, separate from any `Proxy` instance, specifically so that code that only wants to *check* whether something is listening at an endpoint doesn't need to construct a full `Proxy` object (which, per Section 8, immediately tries to load the entire command set on construction). It's a liveness check with no side effects and a short-lived, disposable socket — appropriate for, say, a startup script probing several endpoints in sequence before deciding what to launch.
 
----
 
 ## 7. Why `ControlServer` is not a `Proxy`, and what's shared instead
 
 Notice `ControlServer` and `Proxy`/`BaseProxy` don't share a common base class — they're two independent hierarchies that happen to agree on a wire protocol (pickled Python objects over ZeroMQ `REQ`/`REP`, with the literal strings `"Ping"`/`"Pong"` as the handshake). What *is* shared is the vocabulary of `get_commanding_port` / `get_service_port` / `get_monitoring_port` — both sides need to agree on what a "commanding port" means, but the server's job (own the socket, bind, serve requests, own the device) and the client's job (connect, send, wait for reply, degrade gracefully on timeout) are different enough in shape that forcing them into one hierarchy would buy nothing.
 
----
 
-## 8. `BaseProxy` and `Proxy`: the client side
+## 8. `BaseProxy` and `Proxy`, the Client Side
 
 ### 8.1 Three sequential responsibilities, three classes
 
@@ -204,7 +200,7 @@ class Proxy(BaseProxy, ControlServerConnectionInterface):  # + dynamic command l
 
 `ControlServerConnectionInterface` defines connection-lifecycle methods as `@dynamic_interface` stubs that raise `NotImplementedError` — this is the same `dynamic_interface` marker mechanism used elsewhere in device protocol classes (Section 8.3 touches why this matters for `DynamicProxy`): it marks a method as "this name is reserved for connection management and must not be silently overwritten by a dynamically loaded device command of the same name" — the docstring is explicit about this: the interface "guarantees that connection commands do not interfere with the commands defined in the `DeviceConnectionInterface` (which will be loaded from the control server)." `BaseProxy` implements the actual socket handling. `Proxy` adds the mechanism that makes a Proxy object able to grow new methods at runtime, one per command the connected control server actually offers (Section 8.4) — which is the single most distinctive thing about this class.
 
-### 8.2 `send()`: retry, reconnect, and the meaning of "connected" in ZeroMQ
+### 8.2 `send()`, Retry, Reconnect, and the Meaning of "Connected" in ZeroMQ
 
 ```python
 def send(self, data, retries=REQUEST_RETRIES, timeout=None):
@@ -236,20 +232,22 @@ class DynamicProxy(BaseProxy, DynamicClientCommandMixin):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+
 # TODO (rik): remove all methods from Proxy that are also define in the BaseProxy
 
-class Proxy(BaseProxy, ControlServerConnectionInterface):
-    ...
+
+class Proxy(BaseProxy, ControlServerConnectionInterface): ...
 ```
 
 `DynamicProxy` composes `BaseProxy` with a different mixin (`DynamicClientCommandMixin`, from `egse.mixin`) than `Proxy` does — a second, apparently parallel mechanism for building dynamically-commandable client objects, existing alongside `Proxy`'s own `load_commands()` approach (Section 8.4). The `# TODO (rik): remove all methods from Proxy that are also define in the BaseProxy` comment, left in the source, is a first-person acknowledgment (worth taking at face value, given its author) that `Proxy` accumulated some duplication with `BaseProxy` over time — methods like `get_monitoring_port`/`get_commanding_port`/`get_service_port` are defined on `BaseProxy` (Section 8.5) and `Proxy` inherits them without needing to redeclare anything, but the comment suggests that wasn't always tidy historically. This is flagged in the Pitfalls appendix (P-008) as a "confirm `DynamicProxy` vs `Proxy`'s actual relationship and either consolidate or document why both exist" item — exactly the kind of thing worth an explicit decision before a handover, rather than leaving two "the dynamic one" classes for a successor to have to reverse-engineer the difference between.
 
-### 8.4 `load_commands()`: a Proxy that grows its own interface at runtime
+### 8.4 `load_commands()`, a Proxy That Grows Its Own Interface at Runtime
 
 ```python
 def _request_commands(self):
     response = self.send("send_commands")
     self._commands = response
+
 
 def _add_commands(self):
     for key in self._commands:
@@ -268,11 +266,12 @@ This is the mechanism that makes `hexapod_proxy.homing()` work without a `homing
 
 **The collision guard is the one piece of this worth reading closely.** If the Proxy already has an attribute of the given name, it's only overwritten if that attribute is *not* already a method carrying the `__dynamic_interface` marker (Section 8.1) — i.e., connection-management methods like `connect_cs` are protected from being silently replaced by a same-named device command, but a regular Python method a subclass author happened to define (without the marker) is also protected, with a warning logged rather than a silent, confusing override. This is the direct, practical payoff of the `ControlServerConnectionInterface`/`@dynamic_interface` split from Section 8.1 — it's not there to enable to `Proxy`'s connection lifecycle, it's there specifically to survive contact with `_add_commands()`.
 
-### 8.5 `get_service_proxy()`: a Proxy that can hand you a different kind of Proxy
+### 8.5 `get_service_proxy()`, a Proxy That Can Hand You a Different Kind of Proxy
 
 ```python
 def get_service_proxy(self):
     from egse.services import ServiceProxy  # prevent circular import problem
+
     transport, address, _ = split_address(self._endpoint)
     response = self.send("get_service_port")  # FIXME: Check if this is still returning the proper port
     ...
@@ -281,9 +280,8 @@ def get_service_proxy(self):
 
 Recall Section 2's three sockets: a `Proxy` normally only ever talks to the *commanding* socket. `get_service_proxy()` is the bridge to the *service* socket — given a device Proxy already connected to a control server's commanding endpoint, this method asks that same server (over the commanding channel) what its service port is, then constructs and returns a brand-new `ServiceProxy` object pointed at that different port. This is a convenience specifically for code that's holding a device Proxy and suddenly needs to ask a service-level question (e.g. "what's your process status") without the caller having to independently know or reconstruct the service endpoint by hand. The inline `# FIXME: Check if this is still returning the proper port` is left as-is here too — noted in the Pitfalls appendix (P-008, same entry as the `DynamicProxy` question, since both point at the same general area of the file needing a maintenance pass) rather than resolved silently, since verifying it means actually exercising a live control server connection, not just reading source.
 
----
 
-## 9. `self.service_id` vs `self._service_id`: a real, confirmed bug
+## 9. `self.service_id` vs `self._service_id`, a Real Confirmed Bug
 
 ```python
 # in ControlServer.__init__:
@@ -321,7 +319,6 @@ Every sibling server class in the package — the registry service base itself, 
 
 **Practical consequence:** any code — a subclass, a monitoring tool, a test — that reads `control_server.service_id` expecting to find the registered ID (which is exactly what the attribute's own docstring promises) will always get `None`, silently, even when registration genuinely succeeded and the heartbeat is running. Only code that happens to know about the undocumented `_service_id` name gets the real value. This is logged as **P-006** in the appendix, flagged as the single highest-value fix to come out of this chapter — it's a one-line change (rename `_service_id` to `service_id` in `register_service`), but worth a deliberate look at every call site across the monorepo before touching it, precisely because "silently always `None`" is the kind of bug that other code may have already, unknowingly, worked around.
 
----
 
 ## What carries forward
 
