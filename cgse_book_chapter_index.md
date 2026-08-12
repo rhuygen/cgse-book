@@ -22,7 +22,10 @@ Findings logged in the Pitfalls appendix: P-006 (`ControlServer.service_id` neve
 
 A full skeleton was scaffolded on 2026-08-12, covering Parts I–IV (orientation plus the whole core framework: `cgse-common` + `cgse-core`). Chapter numbering is global across the book; file numbering restarts at `01` within each Part folder. Coordinates (`cgse-coordinates`), GUI (`cgse-gui`), the generic device-driver projects, and the mission-specific projects (`ariel`, `ivs`, `plato`) are deliberately out of scope for this skeleton pass — planned for a later session.
 
-**`src/part-1-orientation/`** — one outline stub (`00-outline.md`), three planned sections (Introduction & Philosophy, Architecture at a Glance, Repository Tour), all TBW.
+**`src/part-1-orientation/`** — one file per chapter, all TBW:
+- Ch. 1 `01-introduction-and-philosophy.md` — Introduction and Philosophy
+- Ch. 2 `02-architecture-at-a-glance.md` — Architecture at a Glance
+- Ch. 3 `03-repository-tour.md` — Repository Tour
 
 **`src/part-2-core-concepts/`** — chapters 4–6 drafted (see above); chapters 7–10 are new TBW placeholders continuing the same arc:
 - Ch. 7 `07-protocol-and-command.md` — `egse/protocol.py`, `egse/command.py`
@@ -65,7 +68,9 @@ cgse-book/
       01-title-verso.md
       02-preface.md
     part-1-orientation/
-      00-outline.md                              (Ch. 1-3, TBW)
+      01-introduction-and-philosophy.md          (Ch. 1, TBW)
+      02-architecture-at-a-glance.md             (Ch. 2, TBW)
+      03-repository-tour.md                      (Ch. 3, TBW)
     part-2-core-concepts/
       01-settings-and-setup.md                    (Ch. 4, drafted)
       02-env.md                                   (Ch. 5, drafted)

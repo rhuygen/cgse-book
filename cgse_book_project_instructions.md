@@ -24,7 +24,9 @@ cgse-book/
       01-title-verso.md
       02-preface.md
     part-1-orientation/
-      (chapters TBW; currently one outline stub file)
+      01-introduction-and-philosophy.md   (Ch. 1, TBW)
+      02-architecture-at-a-glance.md      (Ch. 2, TBW)
+      03-repository-tour.md               (Ch. 3, TBW)
     part-2-core-concepts/
       01-settings-and-setup.md
       02-env.md
