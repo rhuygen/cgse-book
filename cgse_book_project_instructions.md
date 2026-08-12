@@ -29,8 +29,17 @@ cgse-book/
       01-settings-and-setup.md
       02-env.md
       03-control-and-proxy.md
+      07-protocol-and-command.md   (Ch. 7, TBW)
+      08-mixin.md                  (Ch. 8, TBW)
+      09-dummy.md                  (Ch. 9, TBW)
+      10-registry.md                (Ch. 10, TBW)
+    part-3-common-utilities/
+      (Ch. 11-16, TBW — remaining cgse-common modules, thematically grouped)
+    part-4-core-services/
+      (Ch. 17-23, TBW — cgse-core middleware services, one per chapter)
       (more chapters land here as they're written, one file per chapter,
-       numbered in reading order)
+       numbered in reading order within its Part folder; chapter numbers
+       in each file's H1 are global across the book)
     back-matter/
       01-appendix-pitfalls-cleanup-backlog.md
 
@@ -63,7 +72,12 @@ The author currently edits the manuscript as plain Markdown in VS Code or a simi
 
 BOOK STRUCTURE SO FAR
 
-Chapters completed: settings.py + setup.py, env.py, control.py + proxy.py (all in cgse-core/cgse-common as noted per chapter).
-Next planned: protocol.py, command.py, mixin.py, dummy.py (worked end-to-end example), then egse/registry/ (service registry — covered after the static-port model so its value is legible by contrast).
+Chapters completed: settings.py + setup.py (Ch. 4), env.py (Ch. 5), control.py + proxy.py (Ch. 6) — all in cgse-core/cgse-common as noted per chapter.
+
+A full skeleton (Parts I-IV, chapters 1-23, all placeholder/TBW except the three above) was scaffolded on 2026-08-12. It covers Part I (orientation), the rest of Part II (protocol.py+command.py, mixin.py, dummy.py, egse/registry/ — Ch. 7-10), a new Part III "cgse-common: The Utility Toolbox" covering the remaining cgse-common modules in six thematic chapters (Ch. 11-16), and a new Part IV "cgse-core: Middleware Services" covering the cgse-core services one control-server-shaped chapter at a time (Ch. 17-23: storage manager, configuration manager (confman + its async cm_acs rewrite), process manager, log server + listeners, metrics hub + notification hub, monitoring/observation/async control server, the cgse CLI).
+
+Deliberately out of scope for this skeleton: cgse-coordinates, cgse-gui, the generic device-driver projects (projects/generic/*), and the mission-specific projects (projects/ariel/*, projects/ivs/*, projects/plato/*) — planned for a later session. See cgse-book-chapter-index.md for the full current file-by-file breakdown and status.
+
+Chapters were grouped thematically rather than 1:1 with modules for Parts III and IV (this was an explicit author decision, given cgse-common alone has 33 modules and cgse-core 52) — a chapter may cover several small/routine modules together, reserving standalone chapters for modules with real design weight, consistent with the "brief for routine, deep for tricky" style rule.
 
 There is also a separate, related research paper project (CGSE for an instrumentation journal, ten-section structure, Section 6 on multi-mission deployment as the evidentiary core) — related but distinct from this book; don't conflate the two unless asked.

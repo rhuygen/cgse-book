@@ -1,5 +1,5 @@
 echo "Building PDF file: cgse-book.pdf ..."
-pandoc src/front-matter/*.md src/part-1-orientation/*.md src/part-2-core-concepts/*.md src/back-matter/*.md \
+pandoc src/front-matter/*.md src/part-1-orientation/*.md src/part-2-core-concepts/*.md src/part-3-common-utilities/*.md src/part-4-core-services/*.md src/back-matter/*.md \
   -o cgse-book.pdf \
   --from markdown \
   --template eisvogel \
@@ -21,7 +21,7 @@ pandoc src/front-matter/*.md src/part-1-orientation/*.md src/part-2-core-concept
   -V classoption=oneside
 
 echo "Building ePub file: cgse-book.epub ..."
-pandoc src/front-matter/*.md src/part-1-orientation/*.md src/part-2-core-concepts/*.md src/back-matter/*.md \
+pandoc src/front-matter/*.md src/part-1-orientation/*.md src/part-2-core-concepts/*.md src/part-3-common-utilities/*.md src/part-4-core-services/*.md src/back-matter/*.md \
   -o cgse-book.epub \
   --metadata-file=metadata.yaml \
   --toc --toc-depth=2
