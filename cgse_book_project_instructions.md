@@ -28,7 +28,7 @@ cgse-book/
     part-1-orientation/
       01-introduction-and-philosophy.md   (Ch. 1, TBW)
       02-architecture-at-a-glance.md      (Ch. 2, TBW)
-      03-repository-tour.md               (Ch. 3, TBW)
+      03-repository-tour.md               (Ch. 3, drafted)
     part-2-core-concepts/
       01-settings-and-setup.md
       02-env.md
@@ -78,9 +78,9 @@ The author currently edits the manuscript as plain Markdown in VS Code or a simi
 
 BOOK STRUCTURE SO FAR
 
-Chapters completed: settings.py + setup.py (Ch. 4), env.py (Ch. 5), control.py + proxy.py (Ch. 6) — all in cgse-core/cgse-common as noted per chapter.
+Chapters completed: repository tour (Ch. 3, orientation — no single module, covers the `uv` monorepo layout and the `egse.*`/`cgse.*` entry-point conventions), settings.py + setup.py (Ch. 4), env.py (Ch. 5), control.py + proxy.py (Ch. 6) — Ch. 4-6 in cgse-core/cgse-common as noted per chapter.
 
-A full skeleton (Parts I-IV, chapters 1-24, all placeholder/TBW except the three above) was scaffolded on 2026-08-12. It covers Part I (orientation), the rest of Part II (protocol.py+command.py, mixin.py, dummy.py, egse/registry/ — Ch. 7-10), a new Part III "cgse-common: The Utility Toolbox" covering the remaining cgse-common modules in six thematic chapters (Ch. 11-16), and a new Part IV "cgse-core: Middleware Services" covering the cgse-core services one control-server-shaped chapter at a time (Ch. 17-24: registry service, storage manager, configuration manager (confman + its async cm_acs rewrite), process manager, log server + listeners, metrics hub + notification hub, monitoring/observation/async control server, the cgse CLI).
+A full skeleton (Parts I-IV, chapters 1-24, all placeholder/TBW except the four above) was scaffolded on 2026-08-12. It covers Part I (orientation), the rest of Part II (protocol.py+command.py, mixin.py, dummy.py, egse/registry/ — Ch. 7-10), a new Part III "cgse-common: The Utility Toolbox" covering the remaining cgse-common modules in six thematic chapters (Ch. 11-16), and a new Part IV "cgse-core: Middleware Services" covering the cgse-core services one control-server-shaped chapter at a time (Ch. 17-24: registry service, storage manager, configuration manager (confman + its async cm_acs rewrite), process manager, log server + listeners, metrics hub + notification hub, monitoring/observation/async control server, the cgse CLI).
 
 The Service Registry is split across two chapters on purpose: Ch. 10 (Part II) covers it as design/API — why dynamic discovery replaces static ports, how `ControlServer`/`Proxy` opt in (`registry/client.py`, `registry/service.py`). Ch. 17 (Part IV, opening the Part) covers it as a deployed service — backend choice (`registry/backend.py`, `registry/server.py`), startup ordering, and operations, since every other Part IV service registers itself with it. The two chapters cross-reference each other rather than duplicating content.
 

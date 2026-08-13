@@ -4,6 +4,10 @@ Reference index for the project knowledge base. Update this file whenever a chap
 
 ## Published / drafted so far
 
+**`src/part-1-orientation/03-repository-tour.md` — Repository Tour**
+No specific module — covers the workspace itself: the `uv` monorepo (`libs/` vs `projects/generic|plato|ariel|ivs`), lockstep versioning via `bump.py`, the `[tool.uv.workspace]`/`[tool.uv.sources]` wiring, the `cgse-common`/`cgse-core` split (mirrored by this book's own Part structure), a worked package anatomy walkthrough (`symetrie-hexapod`), the `egse.*` namespace-package convention and its scoping to in-monorepo contributors only (external device packages should stay under their own distribution name), and the `cgse.*` entry-point families (`cgse.version`, `cgse.settings`, `cgse.service.*` via `HierarchicalEntryPoints`, `cgse.explore`, `cgse.resource`, `cgse.extension.setup_provider`, `cgse.process_management.core_services`, `cgse.storage.persistence`) that let optional packages plug into the `cgse` CLI and `cgse-core` without being hard-imported. Closes out Part I.
+Findings logged in the Pitfalls appendix: P-010 (stale docstring in `cgse_common/cgse.py` names a `cgse.command.plugins` group that the code doesn't actually use — it reads `cgse.command`).
+
 **`src/part-2-core-concepts/01-settings-and-setup.md` — Settings and Setup: Where Configuration Lives**
 Modules: `egse/settings.py`, `egse/setup.py` (both in `cgse-common`)
 Establishes the book's core running framework: CONSTANT vs Settings vs Setup, decided by "how often does the value change, and who changes it." Covers the entry-point-based plugin model for Settings, the float-parsing YAML fix, memoization, the `class//`/`csv//` directive family in Setup, the Setup ID/filename contract, the `ContextVar`-based "current Setup," submit/load asymmetry, and the `SetupManager` provider pattern (optional `cgse-core` dependency). Includes a "what Setup borrows from navdict" section (navdict itself stays out of the book, covered separately). Extended by the author with sections on local settings/site customization, debugging & inspection, and common patterns.
@@ -22,10 +26,9 @@ Findings logged in the Pitfalls appendix: P-006 (`ControlServer.service_id` neve
 
 A full skeleton was scaffolded on 2026-08-12, covering Parts I–IV (orientation plus the whole core framework: `cgse-common` + `cgse-core`). Chapter numbering is global across the book; file numbering restarts at `01` within each Part folder. Coordinates (`cgse-coordinates`), GUI (`cgse-gui`), the generic device-driver projects, and the mission-specific projects (`ariel`, `ivs`, `plato`) are deliberately out of scope for this skeleton pass — planned for a later session.
 
-**`src/part-1-orientation/`** — one file per chapter, all TBW:
+**`src/part-1-orientation/`** — Ch. 3 drafted (see above); Ch. 1-2 still TBW:
 - Ch. 1 `01-introduction-and-philosophy.md` — Introduction and Philosophy
 - Ch. 2 `02-architecture-at-a-glance.md` — Architecture at a Glance
-- Ch. 3 `03-repository-tour.md` — Repository Tour
 
 **`src/part-2-core-concepts/`** — chapters 4–6 drafted (see above); chapters 7–10 are new TBW placeholders continuing the same arc:
 - Ch. 7 `07-protocol-and-command.md` — `egse/protocol.py`, `egse/command.py`
@@ -73,7 +76,7 @@ cgse-book/
     part-1-orientation/
       01-introduction-and-philosophy.md          (Ch. 1, TBW)
       02-architecture-at-a-glance.md             (Ch. 2, TBW)
-      03-repository-tour.md                      (Ch. 3, TBW)
+      03-repository-tour.md                      (Ch. 3, drafted)
     part-2-core-concepts/
       01-settings-and-setup.md                    (Ch. 4, drafted)
       02-env.md                                   (Ch. 5, drafted)

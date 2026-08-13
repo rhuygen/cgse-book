@@ -58,7 +58,7 @@ Each chapter is a self-contained Markdown file: H1 for the chapter title, H2 for
 
 ## Current skeleton status
 
-A full chapter skeleton (Parts I-IV, chapters 1-24) was scaffolded 2026-08-12. Three chapters are drafted (Ch. 4 Settings and Setup, Ch. 5 env.py, Ch. 6 control.py/proxy.py); everything else is a TBW placeholder with a scope description, ready to be filled in.
+A full chapter skeleton (Parts I-IV, chapters 1-24) was scaffolded 2026-08-12. Four chapters are drafted (Ch. 3 Repository Tour, Ch. 4 Settings and Setup, Ch. 5 env.py, Ch. 6 control.py/proxy.py); everything else is a TBW placeholder with a scope description, ready to be filled in.
 
 Deliberately out of scope so far: `cgse-coordinates`, `cgse-gui`, the generic device-driver projects (`projects/generic/*`), and the mission-specific projects (`projects/ariel/*`, `projects/ivs/*`, `projects/plato/*`). Planned for a later pass — don't start drafting these without checking in first, since Part numbering/placement isn't decided yet.
 

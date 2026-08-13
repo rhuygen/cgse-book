@@ -99,3 +99,16 @@ Entries are grouped by the chapter they surfaced in and listed in the order they
 - **Issue:** The `mon_delay`/`hk_delay` monitoring and housekeeping cadence is computed as `time_in_ms() - last_time >= self.mon_delay`. `time_in_ms()` (`egse.system`) wraps `time.time()` — wall-clock, not monotonic — and its own docstring recommends `perf_counter()` for exactly this kind of use. A backward system-clock adjustment (NTP correction, manual change) would make the elapsed-time computation go negative and stall monitoring/housekeeping until the deficit is made up; a forward jump would fire it early. `ControlServer` instances are meant to run unattended for extended periods, long enough to plausibly see a clock adjustment.
 - **Fix scope:** Small and self-contained — track elapsed time via `time.perf_counter()` instead of `time_in_ms()` differences. Should ship with a test that simulates a backward wall-clock jump and asserts the scheduling cadence is unaffected, since the current code has clearly run for a long time without anyone hitting this.
 - **Risk of leaving as-is:** Low-to-medium. No reported incident so far, but the failure mode (delayed or skipped housekeeping/monitoring after a clock adjustment) would be silent and easy to misattribute to something else if it ever occurred.
+
+
+## Repository Tour Chapter (Chapter 3)
+
+### P-010 Stale Docstring Names the Wrong Entry-Point Group
+
+*Confirmed by reading the actual `entry_points()` call sites.*
+
+- **Module:** `cgse_common/cgse.py`
+- **Where:** Module-level docstring vs. `build_app()`
+- **Issue:** The module docstring says top-level CLI commands are added "from external packages when they are provided as entry points with the group name `cgse.command.plugins`." The actual code in `build_app()` calls `entry_points("cgse.command")` — no `.plugins` suffix — and every `pyproject.toml` in the workspace that registers one (`cgse-tools`) uses `cgse.command`, not `cgse.command.plugins`. The docstring names a group that has never existed in any registered entry point.
+- **Fix scope:** Trivial — correct the group name in the docstring to `cgse.command`.
+- **Risk of leaving as-is:** Very low functionally (the code is self-consistent and works), but a future contributor writing a new top-level command by trusting the docstring would register it under the wrong group and see it silently never appear in the CLI, with no error to point at why.
