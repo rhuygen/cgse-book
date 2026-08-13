@@ -14,6 +14,7 @@ pandoc src/front-matter/*.md src/part-1-orientation/*.md src/part-2-core-concept
   --top-level-division=chapter \
   --toc --toc-depth=2 \
   --pdf-engine=xelatex \
+  --include-in-header=latex/unicode-fallback.tex \
   -V geometry:margin=1in \
   -V mainfont="Georgia" \
   -V colorlinks=true \

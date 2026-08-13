@@ -1,0 +1,13 @@
+% Georgia (the book's main font) is missing a handful of Unicode symbols used
+% in prose, e.g. U+2192 RIGHTWARDS ARROW ("A -> B" written as "A → B").
+% Route just those characters through LaTeX's own math-mode symbol fonts
+% (Computer Modern, bundled with every TeX Live install on every OS) instead
+% of a real Unicode font, so the build doesn't depend on which system fonts
+% happen to be installed on the machine running it (this used to route
+% through "Apple Symbols," a macOS-only font; that broke on Linux/CI).
+%
+% Note: eisvogel's built-in mainfontfallback mechanism (RawFeature={fallback=...})
+% only works under LuaTeX (via luaotfload); this build uses xelatex, where that
+% option is silently ignored, so we handle it explicitly here instead.
+\usepackage{newunicodechar}
+\newunicodechar{→}{\ensuremath{\rightarrow}}
