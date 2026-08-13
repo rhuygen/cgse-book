@@ -1,0 +1,51 @@
+# Acronyms
+
+*A quick-reference key for abbreviations used throughout this book.*
+
+| Acronym | Meaning |
+| ------- | -------------------------------------------------------- |
+| ABC | Abstract Base Class |
+| API | Application Programming Interface |
+| ARIEL | Atmospheric Remote-sensing Infrared Exoplanet Large-survey (ESA mission) |
+| CGSE | Common-EGSE — this framework |
+| CI | Continuous Integration |
+| CLI | Command-Line Interface |
+| CPU | Central Processing Unit |
+| CSV | Comma-Separated Values |
+| DAQ | Data Acquisition |
+| EGSE | Electrical Ground Support Equipment |
+| FITS | Flexible Image Transport System |
+| GPIB | General Purpose Interface Bus |
+| GUI | Graphical User Interface |
+| HDF5 | Hierarchical Data Format, version 5 |
+| HK | Housekeeping (periodic device status/diagnostic data) |
+| IP | Internet Protocol |
+| JSON | JavaScript Object Notation |
+| NTP | Network Time Protocol |
+| OS | Operating System |
+| PDF | Portable Document Format |
+| PEP | Python Enhancement Proposal |
+| PLATO | PLAnetary Transits and Oscillations of stars (ESA mission) |
+| PR | Pull Request |
+| REPL | Read-Eval-Print Loop |
+| SCPI | Standard Commands for Programmable Instruments |
+| SIGTERM | Termination signal (POSIX) |
+| SSH | Secure Shell |
+| SUT | System Under Test |
+| TVAC | Thermal Vacuum (test/chamber) |
+| TUI | Textual User Interface |
+| UI | User Interface |
+| YAML | YAML Ain't Markup Language |
+| ZeroMQ / ZMQ | The messaging library CGSE's control-server/proxy sockets are built on |
+
+## Test Site Identifiers
+
+*Used as `site_id` values throughout the `Settings`/`Setup` chapters — full institution names TBW.*
+
+| Code | Institution |
+| ------ | ----------- |
+| CSL | Centre Spatial de Liège, Belgium |
+| SRON | Space Research Organisation Netherlands |
+| IAS | Institut d'Astrophysique Spatiale, France |
+| INTA | Instituto Nacional de Técnica Aeroespacial, Spain |
+| KUL | KU Leuven, Belgium |
