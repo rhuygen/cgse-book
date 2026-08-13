@@ -40,7 +40,7 @@
 
 ## Test Site Identifiers
 
-*Used as `site_id` values throughout the `Settings`/`Setup` chapters — full institution names TBW.*
+*Used as `site_id` values throughout the `Settings`/`Setup` chapters.*
 
 | Code | Institution |
 | ------ | ----------- |
