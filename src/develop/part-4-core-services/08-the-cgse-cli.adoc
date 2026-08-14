@@ -1,0 +1,31 @@
+== The CGSE Command-Line Interface
+
+_Starting, stopping, and exploring the running system._
+
+Modules: `cgse_core/_start.py`, `cgse_core/_status.py`, `cgse_core/_stop.py`, `cgse_core/cgse_explore.py`, `cgse_core/services.py`, `egse/services.py` (all in `cgse-core`)
+
+Part IV closes with the operator-facing entry point that ties every service covered in this Part together: the `cgse` command-line tool used to bring the whole system up, check on it, and take it down again.
+
+=== Starting and Stopping the System
+
+`_start.py` and `_stop.py`: what "starting CGSE" actually launches, in what order, and why that order matters given the dependencies between services introduced earlier in this Part.
+
+TBW.
+
+=== Status and Health Checks
+
+`_status.py` and how it determines whether each service is actually up, versus merely having been launched.
+
+TBW.
+
+=== Exploring a Running System
+
+`cgse_explore.py` as the operator's window into a live deployment.
+
+TBW.
+
+=== `services.py`, Two Modules, One Name
+
+`cgse_core/services.py` (CLI-facing service orchestration) versus `egse/services.py` (the services a control server exposes, from Chapter 6) — same name, different layer; worth being explicit about which is which.
+
+TBW.

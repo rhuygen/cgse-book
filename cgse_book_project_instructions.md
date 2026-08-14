@@ -12,50 +12,57 @@ git clone --depth 1 https://github.com/rhuygen/cgse-book.git
 
 Never rely on a previous session's clone or on memory of a module's contents. The CGSE source changes frequently; always verify current behavior by reading and, where feasible, running the actual code rather than assuming it matches an earlier chapter.
 
-Before starting or resuming any chapter, check cgse-book for the current state of that file. The author edits the manuscript directly as plain Markdown, in VS Code or a similar editor, and commits/pushes changes himself. Treat whatever is currently in the repo as authoritative over anything drafted earlier in this or another conversation. If a chapter already exists there, work from its current content, not from an earlier draft, and preserve any additions the author has made to it.
+Before starting or resuming any chapter, check cgse-book for the current state of that file. The author edits the manuscript directly as plain AsciiDoc, in VS Code or a similar editor, and commits/pushes changes himself. Treat whatever is currently in the repo as authoritative over anything drafted earlier in this or another conversation. If a chapter already exists there, work from its current content, not from an earlier draft, and preserve any additions the author has made to it.
 
 REPO LAYOUT
 
 cgse-book/
-  cgse_book_project_instructions.md   (this file)
-  cgse-book-chapter-index.md          (orientation index, kept up to date)
+  cgse_book_project_instructions.md     (this file)
+  cgse_book_chapter_index.md            (orientation index, kept up to date)
+  cgse_book_asciidoc_conventions.md     (AsciiDoc parser gotchas + house style — read before converting/drafting)
   src/
-    front-matter/
-      01-title-verso.md
-      02-about.md
-      03-preface.md
-      04-acknowledgments.md
-    part-1-orientation/
-      01-introduction-and-philosophy.md   (Ch. 1, TBW)
-      02-architecture-at-a-glance.md      (Ch. 2, TBW)
-      03-repository-tour.md               (Ch. 3, drafted)
-    part-2-core-concepts/
-      01-settings-and-setup.md
-      02-env.md
-      03-control-and-proxy.md
-      07-protocol-and-command.md   (Ch. 7, TBW)
-      08-mixin.md                  (Ch. 8, TBW)
-      09-dummy.md                  (Ch. 9, TBW)
-      10-registry.md                (Ch. 10, TBW — registry as design/API; deployed-service side split to Ch. 17)
-    part-3-common-utilities/
-      (Ch. 11-16, TBW — remaining cgse-common modules, thematically grouped)
-    part-4-core-services/
-      (Ch. 17-24, TBW — cgse-core middleware services, one per chapter;
-       opens with the Registry Service (Ch. 17) since every other service
-       here registers with it on startup)
-      (more chapters land here as they're written, one file per chapter,
-       numbered in reading order within its Part folder; chapter numbers
-       in each file's H1 are global across the book)
-    back-matter/
-      01-appendix-pitfalls-cleanup-backlog.md
+    images/                              (shared assets — logo, cover)
+    themes/
+      cgse-book-theme.yml                 (asciidoctor-pdf theme)
+    develop/                              (this manual; a future sibling manual, e.g. an operator guide, would get its own sibling folder here — see BOOK PRODUCTION)
+      developer-manual.adoc               (master doc — includes everything below via include::)
+      front-matter/
+        01-title-verso.adoc
+        02-about.adoc
+        03-preface.adoc
+        04-acknowledgments.adoc
+        05-acronyms.adoc
+      part-1-orientation/
+        01-introduction-and-philosophy.adoc   (Ch. 1, TBW)
+        02-architecture-at-a-glance.adoc      (Ch. 2, TBW)
+        03-repository-tour.adoc               (Ch. 3, drafted)
+      part-2-core-concepts/
+        01-settings-and-setup.adoc
+        02-env.adoc
+        03-control-and-proxy.adoc
+        07-protocol-and-command.adoc   (Ch. 7, TBW)
+        08-mixin.adoc                  (Ch. 8, TBW)
+        09-dummy.adoc                  (Ch. 9, TBW)
+        10-registry.adoc                (Ch. 10, TBW — registry as design/API; deployed-service side split to Ch. 17)
+      part-3-common-utilities/
+        (Ch. 11-16, TBW — remaining cgse-common modules, thematically grouped)
+      part-4-core-services/
+        (Ch. 17-24, TBW — cgse-core middleware services, one per chapter;
+         opens with the Registry Service (Ch. 17) since every other service
+         here registers with it on startup)
+        (more chapters land here as they're written, one file per chapter,
+         numbered in reading order within its Part folder)
+      back-matter/
+        01-appendix-pitfalls-cleanup-backlog.adoc
 
-Each chapter is a self-contained Markdown file, starting at H1 for the chapter title, H2 for its top-level sections, H3/H4 for subsections. Do not merge multiple chapters into one file, and do not pre-emptively demote heading levels to nest under a "Part" — Parts are just folders for organization; how the final book gets assembled (and whether heading levels need adjusting for that) is a separate, not-yet-decided step (see BOOK PRODUCTION below).
+Each chapter is a self-contained AsciiDoc file: `==` for the chapter title, `===` for top-level sections, `====` for subsections — no manual "Chapter N" or "N.M" numbers in heading text, since `developer-manual.adoc` sets `:sectnums:` and AsciiDoc's book doctype numbers every heading automatically (manual numbers double up with this — a confirmed bug, see the conventions file). Do not merge multiple chapters into one file. Part headings (`=`) and `include::` directives live only in `developer-manual.adoc`, never in individual chapter files.
 
 WORKFLOW
 
-- Write new/updated chapters as clean plain-Markdown files, one per module or logical module-pair, following the existing naming pattern (NN-short-name.md, numbered in reading order within its Part folder).
+- Write new/updated chapters as clean AsciiDoc files, one per module or logical module-pair, following the existing naming pattern (NN-short-name.adoc, numbered in reading order within its Part folder).
+- Read `cgse_book_asciidoc_conventions.md` before drafting or converting anything — it documents confirmed, silent AsciiDoc parser gotchas (found during the 2026-08-14 Markdown→AsciiDoc migration) that don't error, they just render wrong. A clean build is not evidence of correct output; the file's verification-discipline section explains how to actually check.
 - After creating or updating a file, present it to the user for review; the user commits/pushes to cgse-book themselves (do not assume push access — there is none, and cloning is read-only).
-- Maintain the running "Pitfalls and Cleanup Backlog Appendix" appendix (01-appendix-pitfalls-cleanup-backlog.md): log any confirmed bug, dead code path, or inconsistency found while writing a chapter, using the existing field format (Module / Where / Issue / Evidence if applicable / Fix scope / Risk of leaving as-is). Verify suspected bugs empirically (actually run the code) before logging them as confirmed, not just from reading.
+- Maintain the running "Pitfalls and Cleanup Backlog Appendix" appendix (`src/develop/back-matter/01-appendix-pitfalls-cleanup-backlog.adoc`): log any confirmed bug, dead code path, or inconsistency found while writing a chapter, using the existing field format (an AsciiDoc description list: Module:: / Where:: / Issue:: / Evidence:: if applicable / Fix scope:: / Risk of leaving as-is::). Verify suspected bugs empirically (actually run the code) before logging them as confirmed, not just from reading.
 - Flag when re-syncing either repo would help — e.g. if it's been a while since the last clone/pull in this session, or the user mentions having pushed new edits.
 
 STYLE — "brief for routine code, deep for tricky decisions"
@@ -67,24 +74,35 @@ STYLE — "brief for routine code, deep for tricky decisions"
 
 FORMATTING
 
-- Plain Markdown only. Standard CommonMark — no mkdocs-specific syntax (no `!!! note` admonitions, no wikilinks, no `{: .class}` tags). Pandoc's own fenced-div syntax (`::: {.classname} ... :::`) is fine — see the callout-box convention below; it's a Pandoc-native extension, not an mkdocs one, and degrades gracefully to a plain `<div class="classname">` in any other renderer.
-- One paragraph, bullet, or field per physical line — no manual hard-wrapping mid-paragraph. Let the editor soft-wrap. Blank lines are the only paragraph/block separator. (This convention was originally chosen for Ulysses' editor but is being kept because it also gives cleaner, more predictable line-level diffs than arbitrary hard-wrapping — revisit if the author wants sentence-per-line instead, which gives even finer-grained diffs but is riskier to auto-generate given inline code spans, abbreviations, and version numbers throughout the text.)
-- Preserve fenced code blocks, tables, and headings exactly; only prose gets reflowed onto single lines.
-- Headings: number + short noun phrase only. No colons or em-dash explanatory clauses in headings — they wrap badly in printed output and clutter a table of contents. If a heading's hook phrase is worth keeping, add it as a short italic "deck" line directly under the heading instead.
-- **Callout boxes for non-CGSE background concepts** (e.g. "what is a Python namespace package"): wrap the explanation in a Pandoc fenced div with class `concept`, lead with a bold label, and close with one link to an authoritative external source rather than reproducing its depth inline:
+- Plain AsciiDoc. See `cgse_book_asciidoc_conventions.md` for the parser gotchas found so far — read it before writing prose with inline code spans (which is most of this book).
+- One paragraph, bullet, or field per physical line — no manual hard-wrapping mid-paragraph. Let the editor soft-wrap. Blank lines are the only paragraph/block separator. (This convention was originally chosen for Ulysses' editor but is being kept because it also gives cleaner, more predictable line-level diffs than arbitrary hard-wrapping.)
+- Preserve fenced (`[source,...]` / `----`) code blocks, tables, and headings exactly; only prose gets reflowed onto single lines.
+- Headings: short noun phrase only, no manual numbers. AsciiDoc's book doctype with `:sectnums:` numbers every heading automatically (including prepending "Chapter" to chapter-level headings) — adding manual "Chapter N" or "N.M" prefixes doubles up with this. No colons or em-dash explanatory clauses in headings either — they wrap badly in printed output and clutter a table of contents. If a heading's hook phrase is worth keeping, add it as a short italic "deck" line directly under the heading instead.
+- **Tables:** use AsciiDoc's native `[cols="..."]` syntax with explicit column-width ratios, not Markdown pipe tables.
+- **Callout boxes for non-CGSE background concepts** (e.g. "what is a Python namespace package"): use a native admonition, block title as the bold label, close with one link to an authoritative external source rather than reproducing its depth inline:
 
-  ```markdown
-  ::: {.concept}
-  **Python background: namespace packages.** ...
-  See the [Python docs](https://docs.python.org/3/reference/import.html#namespace-packages) for the full mechanism.
-  :::
+  ```asciidoc
+  [NOTE]
+  .Python background: namespace packages
+  ====
+  A regular Python package is one directory with an `+__init__.py+`, owned by
+  exactly one installed distribution...
+  See the https://docs.python.org/3/reference/import.html#namespace-packages[Python docs]
+  for the full mechanism.
+  ====
   ```
 
-  In the PDF build (see BOOK PRODUCTION below) this renders as a tinted, left-bordered box; the ePub build gets the same look via `epub/callouts.css`. Only for genuinely general background, not CGSE-specific explanations. First example: Chapter 3, Section 6.
+  This renders as a real admonition box (icon, tinted background) natively — no custom filter needed, unlike the Pandoc-era version of this convention. Only for genuinely general background, not CGSE-specific explanations. First example: Chapter 3, Section 6.
 
 BOOK PRODUCTION
 
-The author edits the manuscript as plain Markdown in VS Code. Production into PDF and ePub is settled and working: `build.sh` in the cgse-book repo runs Pandoc twice — PDF via the `eisvogel` LaTeX template and `xelatex`, ePub via Pandoc's built-in ePub writer — over every `src/*/*.md` file in Part order. Custom pieces are wired in via `build.sh`: in `latex/`, `unicode-fallback.tex` (routes a few Unicode symbols Georgia can't render through LaTeX's math-mode fonts) and `callouts.tex` + `div-environments.lua` (the `concept` callout-box mechanism above, PDF side); in `epub/`, `callouts.css` (same mechanism, ePub side). Don't assume a different export tool (Ulysses, mkdocs, etc.) unless the author explicitly asks for that instead.
+The author edits the manuscript as plain AsciiDoc in VS Code. Production into PDF is settled and working: `build.sh` in the cgse-book repo runs `asciidoctor-pdf` once over `src/develop/developer-manual.adoc`, which pulls in every chapter via `include::`. The PDF theme is `src/themes/cgse-book-theme.yml` (`extends: default`). Adding a chapter means adding one `include::` line to `developer-manual.adoc`, not touching `build.sh`.
+
+The manuscript migrated from Markdown/Pandoc to AsciiDoc/`asciidoctor-pdf` on 2026-08-14 — content unchanged, format and toolchain only. Reasons: native code-block callouts, native `[cols="..."]` table control, native captions, and native admonitions, none of which the Markdown/Pandoc pipeline could do without custom LaTeX/Lua-filter machinery. The trade-off, found during migration: AsciiDoc's inline parser has several *silent* failure modes (documented in `cgse_book_asciidoc_conventions.md`) — a clean build is not evidence the output is correct.
+
+Known environment issue: `:front-cover-image:` is disabled in `developer-manual.adoc` — it crashes `asciidoctor-pdf` 2.3.10 on Ruby < 2.7 (this environment has 2.6.10). Don't re-enable without checking the Ruby version first.
+
+There is no ePub output anymore (the Pandoc-era build produced one; never a hard requirement). Don't assume a different export tool (Ulysses, mkdocs, etc.) unless the author explicitly asks for that instead.
 
 BOOK STRUCTURE SO FAR
 
@@ -94,7 +112,7 @@ A full skeleton (Parts I-IV, chapters 1-24, all placeholder/TBW except the four 
 
 The Service Registry is split across two chapters on purpose: Ch. 10 (Part II) covers it as design/API — why dynamic discovery replaces static ports, how `ControlServer`/`Proxy` opt in (`registry/client.py`, `registry/service.py`). Ch. 17 (Part IV, opening the Part) covers it as a deployed service — backend choice (`registry/backend.py`, `registry/server.py`), startup ordering, and operations, since every other Part IV service registers itself with it. The two chapters cross-reference each other rather than duplicating content.
 
-Deliberately out of scope for this skeleton: cgse-coordinates, cgse-gui, the generic device-driver projects (projects/generic/*), and the mission-specific projects (projects/ariel/*, projects/ivs/*, projects/plato/*) — planned for a later session. See cgse-book-chapter-index.md for the full current file-by-file breakdown and status.
+Deliberately out of scope for this skeleton: cgse-coordinates, cgse-gui, the generic device-driver projects (projects/generic/*), and the mission-specific projects (projects/ariel/*, projects/ivs/*, projects/plato/*) — planned for a later session. See cgse_book_chapter_index.md for the full current file-by-file breakdown and status.
 
 Chapters were grouped thematically rather than 1:1 with modules for Parts III and IV (this was an explicit author decision, given cgse-common alone has 33 modules and cgse-core 52) — a chapter may cover several small/routine modules together, reserving standalone chapters for modules with real design weight, consistent with the "brief for routine, deep for tricky" style rule.
 

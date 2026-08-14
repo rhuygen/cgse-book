@@ -1,0 +1,31 @@
+== Data, Housekeeping and Metrics
+
+_Where the numbers a device produces actually go._
+
+Modules: `egse/persistence.py`, `egse/hk.py`, `egse/metrics.py`, `egse/plugins/metrics/duckdb.py`, `egse/plugins/metrics/influxdb.py`, `egse/plugins/metrics/questdb.py`, `egse/plugins/metrics/line_protocol.py`, `egse/plugins/metrics/migrate.py` (all in `cgse-common`)
+
+Every control server produces housekeeping and metrics data as a side effect of normal operation. This chapter covers the abstraction that data flows through before it reaches a concrete backend, and the pluggable backend implementations themselves.
+
+=== The Persistence Abstraction
+
+``persistence.py``'s abstraction for where data is written, independent of the concrete storage technology, and how this relates to (but is distinct from) `egse/storage/persistence.py` covered in Part IV.
+
+TBW.
+
+=== Housekeeping Data
+
+`hk.py` and how housekeeping parameters are defined, collected, and tagged with their originating device.
+
+TBW.
+
+=== Metrics and the Plugin Backends
+
+`metrics.py` and the entry-point-based plugin backends — DuckDB, InfluxDB, QuestDB, and the shared line-protocol format — and how the plugin model here echoes the Settings plugin model from Chapter 4.
+
+TBW.
+
+=== Choosing and Migrating Between Backends
+
+`migrate.py` and the practical considerations for moving metrics history from one backend to another.
+
+TBW.

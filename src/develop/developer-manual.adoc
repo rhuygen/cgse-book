@@ -1,0 +1,89 @@
+= CGSE: A Field Guide
+Rik Huygen
+:doctype: book
+:toc: left
+:toclevels: 2
+:icons: font
+:sectnums:
+:source-highlighter: rouge
+:imagesdir: ../images
+:xrefstyle: short
+// :front-cover-image: image:cover.png[] -- disabled: crashes asciidoctor-pdf 2.3.10
+// on Ruby < 2.7 (this system has 2.6.10) with "undefined method `absolute_path?'
+// for File:Class" inside resolve_background_image/ink_cover_page. Re-enable once
+// Ruby is upgraded, or once a asciidoctor-pdf version compatible with Ruby 2.6 is
+// pinned. Confirmed by isolating: build succeeds cleanly with this attribute unset.
+
+:sectnums!:
+
+include::front-matter/01-title-verso.adoc[]
+
+include::front-matter/02-about.adoc[]
+
+include::front-matter/03-preface.adoc[]
+
+include::front-matter/04-acknowledgments.adoc[]
+
+include::front-matter/05-acronyms.adoc[]
+
+:sectnums:
+
+= Part I Orientation
+
+include::part-1-orientation/01-introduction-and-philosophy.adoc[]
+
+include::part-1-orientation/02-architecture-at-a-glance.adoc[]
+
+include::part-1-orientation/03-repository-tour.adoc[]
+
+= Part II Core Concepts
+
+include::part-2-core-concepts/01-settings-and-setup.adoc[]
+
+include::part-2-core-concepts/02-env.adoc[]
+
+include::part-2-core-concepts/03-control-and-proxy.adoc[]
+
+include::part-2-core-concepts/07-protocol-and-command.adoc[]
+
+include::part-2-core-concepts/08-mixin.adoc[]
+
+include::part-2-core-concepts/09-dummy.adoc[]
+
+include::part-2-core-concepts/10-registry.adoc[]
+
+= Part III cgse-common: The Utility Toolbox
+
+include::part-3-common-utilities/01-device-communication.adoc[]
+
+include::part-3-common-utilities/02-runtime-and-resilience.adoc[]
+
+include::part-3-common-utilities/03-persistence-housekeeping-metrics.adoc[]
+
+include::part-3-common-utilities/04-messaging-primitives.adoc[]
+
+include::part-3-common-utilities/05-logging-errors-diagnostics.adoc[]
+
+include::part-3-common-utilities/06-odds-and-ends.adoc[]
+
+= Part IV cgse-core: Middleware Services
+
+include::part-4-core-services/01-registry-service.adoc[]
+
+include::part-4-core-services/02-storage-manager.adoc[]
+
+include::part-4-core-services/03-configuration-manager.adoc[]
+
+include::part-4-core-services/04-process-manager.adoc[]
+
+include::part-4-core-services/05-log-server-and-notifications.adoc[]
+
+include::part-4-core-services/06-metrics-and-notification-hubs.adoc[]
+
+include::part-4-core-services/07-monitoring-observation-async-servers.adoc[]
+
+include::part-4-core-services/08-the-cgse-cli.adoc[]
+
+:sectnums!:
+
+include::back-matter/01-appendix-pitfalls-cleanup-backlog.adoc[]

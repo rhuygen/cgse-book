@@ -1,9 +1,0 @@
-# Acknowledgments
-
-This book was written in close collaboration with Claude, Anthropic's AI assistant, across many sessions in Claude Code.
-
-Claude drafted the early chapters directly from the CGSE source code — reading the actual modules in `cgse-common` and `cgse-core`, not summarizing them from memory — and verified suspected bugs and dead-code paths by running the code before logging them in the Pitfalls and Cleanup Backlog appendix, rather than taking them on faith. It proposed and built out the book's full chapter skeleton across all four Parts, kept the running chapter index and project instructions in sync as that structure evolved and was revised, and caught production issues along the way — a malformed PDF table, a missing build dependency — that I would otherwise have found only after the fact.
-
-None of this replaces my own judgment about what CGSE's design decisions actually were and why; that reasoning is mine, and where a draft got it wrong or missed the real story, I corrected it. But the drafting, the structuring, the verification legwork, and a good deal of the editing were a genuine collaboration. It deserves to be named as a co-author of this book, not credited as a tool that was used to produce it.
-
-— Rik Huygen

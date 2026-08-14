@@ -1,0 +1,37 @@
+== Runtime, Processes and Resilience
+
+_The infrastructure every long-running service quietly depends on._
+
+Modules: `egse/system.py`, `egse/process.py`, `egse/task.py`, `egse/decorators.py`, `egse/backoff.py` (all in `cgse-common`)
+
+Control servers (Chapter 6) run unattended for extended periods, spawn and monitor subprocesses, schedule recurring work, and need to retry flaky operations without hand-rolled loops scattered everywhere. This chapter covers the shared primitives that make that possible.
+
+=== System Information Helpers
+
+``system.py``'s convenience functions for system-specific information — including `time_in_ms()`, relevant background for P-009 in the Pitfalls appendix (wall-clock vs. monotonic time in `ControlServer.serve()`).
+
+TBW.
+
+=== Working with Processes and Subprocesses
+
+``process.py``'s functions and classes for spawning, tracking, and managing (sub)processes, and where the Process Manager service (Part IV) builds on this.
+
+TBW.
+
+=== Scheduling Recurring Work
+
+`task.py`, and its relationship to `schedule_task` as introduced in Chapter 6 as cooperative multitasking inside the single-threaded reactor loop.
+
+TBW.
+
+=== Decorators Used Throughout CGSE
+
+``decorators.py``'s collection of decorator functions and where each is actually used across the codebase.
+
+TBW.
+
+=== Backoff and Retry Strategies
+
+``backoff.py``'s shared backoff and jitter strategies for retry logic, and their relationship to the reconnect semantics on `Proxy` (Chapter 6).
+
+TBW.

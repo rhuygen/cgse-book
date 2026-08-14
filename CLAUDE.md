@@ -30,35 +30,41 @@ Before starting or resuming any chapter, check the current state of that file in
 
 ```
 cgse-book/
-  CLAUDE.md                           (this file)
-  cgse_book_project_instructions.md   (Claude Projects equivalent of this file)
-  cgse_book_chapter_index.md          (file-by-file ToC, kept up to date)
-  build.sh                            (builds cgse-book.pdf and cgse-book.epub via Pandoc)
-  metadata.yaml                       (Pandoc title/author/date metadata)
-  TODO.md                             (author's local scratch list — gitignored, not pushed; check it, don't duplicate its contents here since it changes often)
+  CLAUDE.md                             (this file)
+  cgse_book_project_instructions.md     (Claude Projects equivalent of this file)
+  cgse_book_chapter_index.md            (file-by-file ToC, kept up to date)
+  cgse_book_asciidoc_conventions.md     (AsciiDoc parser gotchas + house style — read before converting/drafting)
+  build.sh                              (builds cgse-book.pdf via asciidoctor-pdf)
+  TODO.md                               (author's local scratch list — gitignored, not pushed; check it, don't duplicate its contents here since it changes often)
   src/
-    front-matter/
-      01-title-verso.md
-      02-about.md
-      03-preface.md
-      04-acknowledgments.md
-    part-1-orientation/               Ch. 1-3, all TBW
-    part-2-core-concepts/             Ch. 4-10 — the client/server foundation
-    part-3-common-utilities/          Ch. 11-16 — remaining cgse-common modules
-    part-4-core-services/             Ch. 17-24 — cgse-core middleware services
-    back-matter/
-      01-appendix-pitfalls-cleanup-backlog.md
+    images/                             (shared assets — logo, cover — used via :imagesdir:)
+    themes/
+      cgse-book-theme.yml                (asciidoctor-pdf theme, extends: default)
+    develop/                             (this manual; a future sibling, e.g. an operator guide, would get its own sibling folder here)
+      developer-manual.adoc              (master doc — includes everything below via include::)
+      front-matter/
+        01-title-verso.adoc
+        02-about.adoc
+        03-preface.adoc
+        04-acknowledgments.adoc
+        05-acronyms.adoc
+      part-1-orientation/                Ch. 1-3
+      part-2-core-concepts/              Ch. 4-10 — the client/server foundation
+      part-3-common-utilities/           Ch. 11-16 — remaining cgse-common modules
+      part-4-core-services/              Ch. 17-24 — cgse-core middleware services
+      back-matter/
+        01-appendix-pitfalls-cleanup-backlog.adoc
 ```
 
-See [cgse_book_chapter_index.md](cgse_book_chapter_index.md) for the full file-by-file breakdown, including which chapters are drafted vs. TBW placeholders.
+See [cgse_book_chapter_index.md](cgse_book_chapter_index.md) for the full file-by-file breakdown, including which chapters are drafted vs. TBW placeholders. This layout (a `develop/` folder for this manual, shared `themes/`/`images/` one level up) mirrors the precedent in `IvS-KULeuven/plato-cgse-doc`, which hosts several manuals side by side under one `src/` tree — a future sibling manual (e.g. an operator/expert-user guide, discussed but not started) would slot in as `src/operator/` without disturbing this one.
 
-**Numbering convention:** file numbers restart at `01` within each Part folder; the chapter number in each file's `# Chapter N Title` heading is global across the whole book. When inserting a chapter ahead of existing ones (as happened when the Registry Service chapter was added — see below), renumber every file and heading after it, plus any internal cross-references (`grep -rn "Chapter [0-9]"` across `src/` to find them) — cheap to do while chapters are still TBW placeholders, much less cheap once they're drafted.
+**Numbering convention:** file numbers restart at `01` within each Part folder. Chapter and section numbers are **not** written into the Markdown-era way anymore — `developer-manual.adoc` sets `:sectnums:`, and AsciiDoc's book doctype numbers every `==`/`===`/`====` heading automatically (including prepending the word "Chapter" to `==`-level headings). Do not add manual "Chapter N" or "N.M" prefixes to heading text — they double up with the automatic numbering (confirmed bug, see gotcha #4 in `cgse_book_asciidoc_conventions.md`). Cross-references in prose ("see Section 7") stay as plain text, not live AsciiDoc xrefs, matching the book's existing style.
 
-Each chapter is a self-contained Markdown file: H1 for the chapter title, H2 for top-level sections, H3/H4 for subsections. Never merge multiple chapters into one file. Never pre-emptively demote heading levels to nest under a "Part" — Parts are just folders for organization; how the book gets assembled (and whether heading levels need adjusting) is a separate, not-yet-decided step.
+Each chapter is a self-contained AsciiDoc file: `==` for the chapter title (no "Chapter N" prefix — automatic), `===` for top-level sections, `====` for subsections. Never merge multiple chapters into one file. `developer-manual.adoc` is the only place Part headings (`=`) and `include::` directives live — individual chapter files never include each other.
 
 ## Current skeleton status
 
-A full chapter skeleton (Parts I-IV, chapters 1-24) was scaffolded 2026-08-12. Four chapters are drafted (Ch. 3 Repository Tour, Ch. 4 Settings and Setup, Ch. 5 env.py, Ch. 6 control.py/proxy.py); everything else is a TBW placeholder with a scope description, ready to be filled in.
+A full chapter skeleton (Parts I-IV, chapters 1-24) was scaffolded 2026-08-12. Four chapters are drafted (Ch. 3 Repository Tour, Ch. 4 Settings and Setup, Ch. 5 env.py, Ch. 6 control.py/proxy.py); everything else is a TBW placeholder with a scope description, ready to be filled in. The whole manuscript migrated from Markdown/Pandoc to AsciiDoc/`asciidoctor-pdf` on 2026-08-14 (content unchanged, format and toolchain only) — see `cgse_book_asciidoc_conventions.md` for why and for the parser gotchas that migration surfaced.
 
 Deliberately out of scope so far: `cgse-coordinates`, `cgse-gui`, the generic device-driver projects (`projects/generic/*`), and the mission-specific projects (`projects/ariel/*`, `projects/ivs/*`, `projects/plato/*`). Planned for a later pass — don't start drafting these without checking in first, since Part numbering/placement isn't decided yet.
 
@@ -68,9 +74,10 @@ Chapters in Part III and Part IV are grouped **thematically**, not 1:1 with modu
 
 ## Workflow
 
-- Write new/updated chapters as clean plain-Markdown files, one per module or logical module-group, following the existing naming pattern (`NN-short-name.md`, numbered in reading order within its Part folder).
+- Write new/updated chapters as clean AsciiDoc files, one per module or logical module-group, following the existing naming pattern (`NN-short-name.adoc`, numbered in reading order within its Part folder).
+- Read `cgse_book_asciidoc_conventions.md` before drafting or converting anything — it documents four confirmed, *silent* AsciiDoc parser gotchas (trailing `*`/`_` pairing across spans, possessive apostrophes breaking a code span, dunders losing their underscores, manual numbers doubling with `:sectnums:`) found the hard way during the Markdown→AsciiDoc migration. A clean `asciidoctor-pdf` exit code is not evidence the output is correct — see that file's verification-discipline section.
 - After creating or updating a file, present it for review. The author commits and pushes himself — don't commit or push manuscript changes without being explicitly asked to, even though this checkout (unlike the read-only Claude Projects clone) technically has push access.
-- Maintain the "Pitfalls and Cleanup Backlog" appendix (`src/back-matter/01-appendix-pitfalls-cleanup-backlog.md`): log any confirmed bug, dead code path, or inconsistency found while writing a chapter, in the existing field format (Module / Where / Issue / Evidence / Fix scope / Risk of leaving as-is). Verify suspected bugs empirically — actually run the code — before logging them as confirmed, not just from reading. Chapters already reference specific pitfall entries by ID (e.g. P-006, P-008); keep those cross-references intact when either side changes.
+- Maintain the "Pitfalls and Cleanup Backlog" appendix (`src/develop/back-matter/01-appendix-pitfalls-cleanup-backlog.adoc`): log any confirmed bug, dead code path, or inconsistency found while writing a chapter, in the existing field format (rendered as an AsciiDoc description list: `Module::` / `Where::` / `Issue::` / `Evidence::` / `Fix scope::` / `Risk of leaving as-is::`). Verify suspected bugs empirically — actually run the code — before logging them as confirmed, not just from reading. Chapters already reference specific pitfall entries by ID (e.g. P-006, P-008); keep those cross-references intact when either side changes.
 - When a chapter, the chapter index, and the project instructions all need updating for the same change (e.g. a renumbering, a new Part), update all three in the same pass — they drift out of sync easily otherwise.
 
 ## Style — "brief for routine code, deep for tricky decisions"
@@ -82,43 +89,43 @@ Chapters in Part III and Part IV are grouped **thematically**, not 1:1 with modu
 
 ## Formatting
 
-- Plain Markdown only. Standard CommonMark — no mkdocs-specific syntax (no `!!! note` admonitions, no wikilinks, no `{: .class}` tags), since the target editor and export tooling beyond Pandoc aren't fixed yet. Pandoc's own fenced-div syntax (`::: {.classname} ... :::`) is fine — see the callout-box convention below, which uses it; it's a Pandoc-native Markdown extension, not an mkdocs one, and degrades gracefully to a plain `<div class="classname">` in any other renderer.
-- **Callout boxes for non-CGSE background concepts** (e.g. "what is a Python namespace package," "what is a context manager"): wrap the explanation in a Pandoc fenced div with class `concept`, lead with a bold label, and close with one link to an authoritative external source for the reader who wants the full formal treatment — don't try to reproduce that source's depth inline. Example:
+- Plain AsciiDoc. See `cgse_book_asciidoc_conventions.md` for the parser gotchas found so far — read it before writing prose with inline code spans (which is most of this book).
+- **Callout boxes for non-CGSE background concepts** (e.g. "what is a Python namespace package," "what is a context manager"): use a native admonition, lead with a bold label as the block title, and close with one link to an authoritative external source for the reader who wants the full formal treatment — don't try to reproduce that source's depth inline. Example:
 
-  ```markdown
-  ::: {.concept}
-  **Python background: namespace packages.** A regular Python package is one
-  directory with an `__init__.py`, owned by exactly one installed distribution...
-  See the [Python docs](https://docs.python.org/3/reference/import.html#namespace-packages)
+  ```asciidoc
+  [NOTE]
+  .Python background: namespace packages
+  ====
+  A regular Python package is one directory with an `+__init__.py+`, owned by
+  exactly one installed distribution... See the
+  https://docs.python.org/3/reference/import.html#namespace-packages[Python docs]
   for the full mechanism.
-  :::
+  ====
   ```
 
-  In the PDF build this renders as a tinted, left-bordered box (styled in `latex/callouts.tex`, converted from the Div via the `latex/div-environments.lua` Pandoc filter — Pandoc does not do div-to-LaTeX-environment conversion automatically, verified directly against the pandoc binary; don't assume otherwise without re-checking). In the ePub build it gets the same tinted, left-bordered look via `epub/callouts.css`, wired in with `--css=epub/callouts.css` — Pandoc embeds the stylesheet into the ePub package and links it from every content page automatically. Only use this for genuinely general background — not for CGSE-specific explanations, which belong in normal prose where they can cross-reference other chapters. First worked example: Chapter 3, Section 6 (namespace packages).
+  This renders as a real admonition box (icon, tinted background) natively in both PDF and any other AsciiDoc output format — no custom filter or per-format styling needed, unlike the Pandoc-era version of this convention. Only use this for genuinely general background — not for CGSE-specific explanations, which belong in normal prose where they can cross-reference other chapters. First worked example: Chapter 3, Section 6 (namespace packages).
 - One paragraph, bullet, or field per physical line — no manual hard-wrapping mid-paragraph. Let the editor soft-wrap. Blank lines are the only paragraph/block separator; this gives cleaner line-level diffs.
-- Preserve fenced code blocks, tables, and headings exactly; only prose gets reflowed onto single lines.
-- Headings: number + short noun phrase only, no colons or em-dash explanatory clauses — they wrap badly in print and clutter the ToC. If a heading's hook phrase is worth keeping, add it as a short italic "deck" line directly under the heading instead.
-- **Pipe tables and PDF output:** Pandoc sizes a pipe table's LaTeX columns from the *dash-count* in the separator row, not from cell content — a short header with a short separator line (e.g. `----`) can render a column far too narrow for its actual content, and inline `` `code` `` spans in an overflowing cell won't wrap (LaTeX can't hyphenate `\texttt`), so they visually overlap the next column instead of erroring. If a table looks fine in the Markdown source but wrong in the built PDF, this is almost certainly why. Fix by rewriting the separator row with dash counts proportional to the widths you actually want (verify with `pandoc file.md -t latex | grep -A5 begin{longtable}` — the `\real{...}` fractions should match your intent), not by reformatting cell content.
+- Preserve fenced (`[source,...]` / `----`) code blocks, tables, and headings exactly; only prose gets reflowed onto single lines.
+- Headings: short noun phrase only, no manual numbers, no colons or em-dash explanatory clauses — see the numbering convention above (AsciiDoc numbers automatically) and the "why" in `cgse_book_asciidoc_conventions.md` gotcha #4. If a heading's hook phrase is worth keeping, add it as a short italic "deck" line directly under the heading instead.
+- **Tables:** use AsciiDoc's native `[cols="..."]` syntax with real column-width ratios, not Pandoc-style pipe tables. This sidesteps the old dash-count fragility entirely — column widths are explicit, not inferred from separator-row punctuation.
 
 ## Building the book
 
-`build.sh` runs two Pandoc invocations (PDF via `eisvogel`/`xelatex`, ePub) over every `src/*/​*.md` file in Part order. It globs each Part folder explicitly, so a new Part folder must be added to both invocations in `build.sh`, not just created under `src/`.
-
-`xelatex` is typically installed at `/Library/TeX/texbin/xelatex` on this machine but that directory is often **not** on the shell's default `PATH` in a fresh Claude Code bash session — a bare `bash build.sh` can fail with `'xelatex' not found` even though it's actually installed. Prefix the build with the full PATH before concluding TeX is missing:
+`build.sh` runs one `asciidoctor-pdf` invocation over `src/develop/developer-manual.adoc`, which pulls in every chapter via `include::`. Adding a chapter means adding one `include::` line to `developer-manual.adoc` (in the right Part), not touching `build.sh` — unlike the old Pandoc pipeline, which globbed Part folders directly.
 
 ```bash
-PATH="/Library/TeX/texbin:$PATH" bash build.sh
+bash build.sh
 ```
 
-`cgse-book.pdf` and `cgse-book.epub` are both gitignored build outputs — rebuild locally to verify a change, don't expect them to exist or to be committed.
+No `PATH` prefix needed — `asciidoctor-pdf` doesn't depend on a separate TeX install the way the old Pandoc/xelatex pipeline did.
 
-**Missing-character warnings (`Missing character: There is no → ... in font Georgia`):** Georgia doesn't have every Unicode symbol used in prose (e.g. U+2192 for "A → B"). Don't switch the book's main font or the PDF engine to fix this — eisvogel's built-in `mainfontfallback` mechanism only actually works under `lualatex` (it relies on `luaotfload.add_fallback`); under `xelatex`, which this build uses, the same `RawFeature={fallback=...}` option is silently a no-op, so setting `mainfontfallback` won't do anything here despite the template accepting it. The fix in place: `latex/unicode-fallback.tex`, included via `--include-in-header` in `build.sh`, uses `newunicodechar` to route the specific missing characters through **LaTeX's own math-mode symbol fonts** (e.g. `\newunicodechar{→}{\ensuremath{\rightarrow}}`), not a real Unicode font — Computer Modern ships with every TeX Live install on every OS, so the build has no dependency on which system fonts happen to be installed on the machine running it. (An earlier version of this fix routed through "Apple Symbols," a macOS-only system font; that broke on Linux/CI and was replaced for exactly that reason — don't reintroduce a system-font dependency here.) If a new missing-character warning shows up for a symbol with no sensible math-mode equivalent, prefer a font bundled with TeX Live itself (loaded via fontspec's `Path=` option pointing at a font file checked into the repo, e.g. under `latex/fonts/`) over any OS-installed font, so the build stays portable.
+**Known environment issue:** `:front-cover-image:` is commented out in `developer-manual.adoc`. It crashes `asciidoctor-pdf` 2.3.10 on this machine's Ruby 2.6.10 with `undefined method 'absolute_path?' for File:Class` — that method was added in Ruby 2.7, and this asciidoctor-pdf version's cover-image code path assumes it exists. Confirmed by isolating: the build succeeds cleanly with the attribute unset, and fails only when it's set, regardless of theme. Re-enable once Ruby is upgraded (or an asciidoctor-pdf version compatible with 2.6 is pinned) — don't silently re-enable it without checking `ruby -e 'puts RUBY_VERSION; puts File.respond_to?(:absolute_path?)'` first.
 
-**Don't switch to `lualatex` to get automatic fallback "for free."** It was tried and tested directly: `--pdf-engine=lualatex` with `mainfontfallback` set (either "Apple Symbols" or a proper OpenType font like "STIX Two Text") fails outright on this install — `! error: (pdf backend): invalid font identifier when asking 'fontsize'` — even though a minimal eisvogel+lualatex document with plain `mainfont` and no fallback compiles fine. So the specific mechanism (`luaotfload` fallback) that would make lualatex the "correct" engine for this is itself broken with the current TeX Live 2026 + eisvogel combination. Don't re-attempt this without first figuring out the template/package version mismatch behind that error; the `xelatex` + `newunicodechar` workaround above has no such issue and costs one line per new symbol, which so far has been rare enough not to matter.
+`cgse-book.pdf` is a gitignored build output — rebuild locally to verify a change, don't expect it to exist or to be committed. There is no ePub output anymore (the Pandoc-era build produced one; ePub was never a hard requirement, and reproducing it under AsciiDoc — `asciidoctor-epub3` — hasn't been set up. Revisit if actually needed.)
 
 ## Acknowledgments
 
-This book credits Claude as a co-author (`src/front-matter/04-acknowledgments.md`, with a pointer from the copyright/verso page). If asked to update that section, keep it specific about what was actually done in a given session rather than vague, and keep the framing that design-decision judgment calls belong to the author — Claude's role is drafting, verification legwork, and structure.
+This book credits Claude as a co-author (`src/develop/front-matter/04-acknowledgments.adoc`, with a pointer from the copyright/verso page). If asked to update that section, keep it specific about what was actually done in a given session rather than vague, and keep the framing that design-decision judgment calls belong to the author — Claude's role is drafting, verification legwork, and structure.
 
 ## Adjacent, don't conflate
 

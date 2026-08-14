@@ -1,0 +1,21 @@
+extends: default
+base:
+  font-size: 10.5
+code:
+  font-size: 9
+page:
+  numbering:
+    start-at: 1
+  margin: [0.75in, 0.75in, 0.75in, 0.75in]
+title-page:
+  rule:
+    color: 360049
+    width: 100%
+footer:
+  height: 0.45in
+  recto:
+    right:
+      content: '{page-number}'
+  verso:
+    left:
+      content: '{page-number}'

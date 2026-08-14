@@ -1,0 +1,637 @@
+== Settings and Setup
+
+_Where configuration lives._
+
+=== Why this chapter comes early
+
+Almost every other module in CGSE touches `Settings` or `Setup` somewhere. Before we can talk sensibly about device controllers, control servers, or GUI clients, we need a shared vocabulary for a question that comes up in nearly every code review: _should this value be a `CONSTANT`, a `Settings` entry, or a `Setup` entry?_
+
+This chapter answers that question by walking through the two modules that implement the answer: `egse/settings.py` and `egse/setup.py`, both in `libs/cgse-common/src/egse/`. It also touches `egse/env.py` and `egse/plugin.py`, because `Settings` and `Setup` are thin on top of what those two modules provide, and the design only makes sense once you see the layering.
+
+Read this chapter as the template for the rest of the book: for every module we cover later, we'll ask the same three questions — what problem is this solving, what did we decide and why, and where are the sharp edges — but we won't repeat the reasoning about _when to use Settings vs Setup vs a constant_. That reasoning lives here, once, and everything downstream refers back to it.
+
+=== The Problem of Three Very Different Kinds of Configuration
+
+Test facility software accumulates configuration values from day one, and if you don't deliberately separate _kinds_ of configuration, they all end up in the same place — usually scattered across module-level constants, `.ini` files, and someone's personal `config.py` that nobody else knows exists. Three years into your project, that becomes unmanageable.
+
+CGSE draws the line along one axis: *how often does the value change, and who changes it?*
+
+[cols="1,2,3,3"]
+|===
+| Kind | Changes... | Example | Where it lives
+
+| `CONSTANT`
+| Never, without a code change
+| `LOG_FORMAT_DEFAULT`, a physical constant, a protocol magic number
+| A module-level name in the `.py` file
+
+| `Settings`
+| Per site / per deployment, but not during a test run
+| `SSH_SERVER`, `RMAP_BASE_ADDRESS`, log format overrides
+| `settings.yaml`, shipped with the package, optionally overridden locally
+
+| `Setup`
+| Per test, per campaign, sometimes per session
+| which hexapod ID is connected, its calibration file, the device class to instantiate
+| A `Setup` YAML file with a unique ID, managed like data, not like code
+|===
+
+The rule of thumb we use in code review:
+
+* If changing the value means *releasing a new version of the code*, it's a `CONSTANT`.
+* If changing the value means *editing a YAML file that ships with, or sits next to, the package*, and the same value is expected to hold for the lifetime of a site's installation, it's a `Settings` entry.
+* If changing the value means *swapping what's physically plugged into the setup, recalibrating something, or starting a new test campaign*, it's a `Setup` entry — and it needs a Setup ID so we can always answer "which configuration was active when this data was taken?"
+
+That last point is the one that trips people up: `Setup` is *not* "the more dynamic version of Settings." It's closer to _data with provenance, with history_. A `Setup` is versioned, timestamped, attributable to a site, and stored as an immutable artifact once submitted. `Settings` has none of that machinery, deliberately, because it doesn't need it — nobody needs to reconstruct "what were the SSH port settings on 14 March 2023."
+
+Keeping this distinction sharp is also what keeps `Settings.load()` fast and side-effect-free (safe to call from anywhere, including import time) while `Setup` loading is explicitly a stateful operation with a global "current setup" context. Blurring the two would have made one of them slow and the other one unsafe.
+
+*A note on environment variables:* they show up twice in this framework, for two unrelated reasons, and it's worth not conflating them here. `egse.env` resolves a fixed set of `<PROJECT>_`-prefixed OS environment variables (`DATA_STORAGE_LOCATION`, `CONF_DATA_LOCATION`, `LOCAL_SETTINGS`, etc.) — these are _locations_, not secrets, and `LOCAL_SETTINGS` in particular is how a site points `Settings` at its override file (Section 2.7). Separately, `egse.env.load_dotenv()` loads an actual `.env` file for genuine secrets (database passwords, API keys) that must never be checked in. Both mechanisms live in `egse/env.py`, covered in full in Chapter 5.
+
+=== `egse/settings.py`
+
+_Configuration that ships with the code._
+
+==== What it needs to solve
+
+Static configuration for the entire system — hostnames, port numbers, device parameters, site ID, log levels, resource limits, etc.. Settings are _not_ for values that change at runtime (use `Setup` for calibration, SUT state, models) and _not_ for sensitive credentials (use `.env` + `python-dotenv` for API keys, database passwords).
+
+Every installable CGSE package (`cgse-common`, `cgse-core`, a device package like `symetrie-hexapod`, a project package like `plato-fits`) may want to contribute its own default static configuration values, without any package having to know about any other package's settings file in advance, and without a central registry file that everyone has to remember to edit.
+
+That requirement — _decentralized contribution, centralized consumption_ — is what pushes the design toward Python entry-points rather than a single settings file living in `cgse-common`.
+
+The `Settings` class in `egse.settings` is the central API. It caches (memoizes) loaded YAML files and returns `attrdict` objects — dicts that allow dot-notation access (`settings.COMMANDING_PORT` instead of `settings["COMMANDING_PORT"]`). All settings are loaded once at app startup and treated as immutable thereafter.
+
+==== The entry-point mechanism
+
+Settings are discovered and merged at startup via entry-points (`cgse.settings`), then optionally overlaid with site-specific local settings (via `<PROJECT>_LOCAL_SETTINGS` environment variable). The merge order is: built-in defaults come first (in each package's `settings.yaml`) → local settings overrides. This lets you deploy to different labs without modifying checked-in code.
+
+Each package that provides configuration settings declares this in its `pyproject.toml` by registering its `settings.yaml` file via the `cgse.settings` entry-point:
+
+[source,toml]
+----
+[project.entry-points."cgse.settings"]
+cgse-common = "cgse_common:settings.yaml"
+----
+
+The entry-point value `"module:filename"` must point to a file inside a real Python package (with `+__init__.py+`). The `egse.plugin.load_plugins_ep` machinery discovers these at runtime and loads/merges them in entry-point order.
+
+*Why this matters:* When a new device package is added to the monorepo, its settings are automatically discovered — no global registry file to update, no manual plumbing. When two packages define the same top-level group, the second one's values overwrite the first (allowing intentional overrides).
+
+The function `get_file_infos()` in `egse/plugin.py`, when called with `entrypoint="cgse.settings"`, resolves every entry-point registered under that group name into a `(path, filename)` tuple by importing the named module and asking Python where it lives on disk:
+
+[source,python]
+----
+def get_file_infos(entry_point: str) -> dict[str, tuple[Path, str]]:
+    eps = dict()
+    for ep in entry_points(entry_point):
+        try:
+            path = get_module_location(ep.module)
+            if path is None:
+                logger.error(...)
+            else:
+                eps[ep.name] = (path, ep.attr)
+        except Exception as exc:
+            logger.error(...)
+    return eps
+----
+
+Two design choices worth calling out:
+
+* *A broken entry-point never blocks the others.* Each entry-point is resolved inside its own `try/except`, and a failure is logged, not raised. If the `pyproject.toml` in `plato-spw` has a typo in its entry-point, every other package's settings still load. This matters a lot in a monorepo where a mistake in one project package shouldn't be able to take down `cgse-core` for everyone else.
+* *The module name uses underscores, the package name uses dashes.* `cgse-common` (the installable package / PyPI name) exposes settings through `cgse_common` (the importable Python module). This is standard Python packaging convention, but it's called out explicitly in the docstring because it's exactly the kind of thing that silently breaks an entry-point and takes ten minutes to debug the first time you hit it. Dashes are not allowed in a module name because it will be interpreted as a minus sign while parsing the Python file and you will get a `SyntaxError`.
+
+The function `load_global_settings()` then reads every resolved file and merges them:
+
+[source,python]
+----
+def load_global_settings(entry_point: str = "cgse.settings", force: bool = False) -> attrdict:
+    ep_settings = get_file_infos(entry_point)
+    global_settings = attrdict(label="Settings")
+    for ep_name, (path, filename) in ep_settings.items():
+        settings = load_settings_file(path, filename, force)
+        recursive_dict_update(global_settings, settings)
+    return global_settings
+----
+
+*Design decision — later package wins.* `recursive_dict_update` merges dictionaries key by key rather than replacing whole top-level groups, and iteration order determines who wins on a conflicting key. This is called out explicitly in the module docstring ("make sure the group names in each package configuration file are unique") rather than solved with an error, because enforcing strict uniqueness across every package in a monorepo — including third-party device packages we don't control — is a bigger cost than the (rare) conflict it would prevent. This is a pragmatic trade-off: we chose "convention documented in the docstring" over "mechanism enforced in code," and it has held up in practice, but it is worth an explicit test whenever a new package adds a top-level group name.
+
+==== The float-parsing fix
+
+_A piece of code that looks pointless until you know why its there._
+
+Near the top of the file:
+
+[source,python]
+----
+# Fix the problem: YAML loads 5e-6 as string and not a number
+# https://stackoverflow.com/questions/30458977/yaml-loads-5e-6-as-string-and-not-a-number
+
+SAFE_LOADER = yaml.SafeLoader
+SAFE_LOADER.add_implicit_resolver(
+    "tag:yaml.org,2002:float",
+    re.compile(r"""^(?: ... )$""", re.X),
+    list("-+0123456789."),
+)
+----
+
+This is exactly the kind of thing that a future maintainer might "clean up" as dead-looking regex noise, so it deserves a paragraph here rather than just a code comment.
+
+PyYAML's `SafeLoader`, out of the box, only recognizes floats written with a decimal point in a narrow set of forms — `5e-6` (no decimal point before the exponent) parses as a *string*, not a float, unless the resolver is patched. That's a real problem for us: calibration coefficients and physical constants in scientific notation are exactly the kind of value that ends up in a `settings.yaml` or `Setup` YAML file, written the way a scientist would naturally write it. Silent string-instead-of-float bugs are nasty precisely because they don't crash — they misbehave quietly downstream, in a unit conversion or a threshold comparison, until someone notices a graph looks wrong.
+
+The fix replaces the implicit resolver for the float tag with a broader regex (adapted from a well-known PyYAML issue) so that `5e-6`, `.5e-6`, `+5e-6` and friends parse as floats everywhere `SAFE_LOADER` is used — which, because `SAFE_LOADER` is patched at module level, means everywhere in the codebase that loads YAML through this module, not just in `Settings`. This is a case where the fix has to sit at the "load YAML" chokepoint rather than in every call site, because there's no way for a call site to know it's about to receive a mis-typed string instead of a float.
+
+==== Memoization in `read_configuration_file`
+
+Settings are memoized by filename; calling `Settings.load()` again doesn't re-read the YAML file from disk. This is by design — settings are static. If you do need to reload (e.g. in a long-running daemon where the local settings file was edited), call `Settings.load(force=True)`. However, this does _not_ automatically propagate to code that cached settings in local variables or class instance variables. *Be cautious:* if a part of your app caches `self.port = settings.COMMANDING_PORT` at `+__init__+`, a later `Settings.load(force=True)` won't update `self.port`. In practice, avoid reloading; restart the process instead.
+
+[source,python]
+----
+def read_configuration_file(filename: Path, *, force=False) -> dict:
+    filename = str(filename)
+    if force or not Settings.is_memoized(filename):
+        ...
+        with open(filename, "r") as stream:
+            yaml_document = yaml.load(stream, Loader=SAFE_LOADER)
+        Settings.add_memoized(filename, yaml_document)
+    return Settings.get_memoized(filename) or {}
+----
+
+Every YAML file is parsed once per process and cached in a class-level dictionary (`Settings.__memoized_yaml`) keyed by filename. The function `Settings.load()` can be called many times per second from many different places in the codebase — device drivers routinely call `Settings.load("SOME_DEVICE")` inside `+__init__+`, and control servers may re-instantiate device proxies repeatedly — so re-parsing YAML from disk on every call would be wasteful for no benefit, since these files are not expected to change while a process is running. `force=True` exists specifically to bypass the cache, and it's used in the test suite and in the `--local`/`--global` CLI paths where a fresh read is actually meaningful (e.g. after a test intentionally rewrites a YAML file on disk).
+
+[TIP]
+.Performance Note
+====
+YAML parsing happens once per file, then results are cached. On first app startup, `load_global_settings` discovers and loads all entry-points, which is O(number of packages). Subsequent `Settings.load()` calls are O(1) cache lookups. For tight loops, cache the group you need: `settings = Settings.load("MyGroup")` at module level, not inside a loop.
+====
+
+*Why a class attribute and not a module-level dict?* Keeping the cache as a "private" (name mangled) class attribute `__memoized_yaml` on `Settings` rather than a plain function keeps the introspection API (`is_memoized`, `get_memoized_locations`, `clear_memoized`) attached to the same namespace users already import. It's a minor stylistic choice, but it means `Settings.get_memoized_locations()` reads naturally at a REPL when you're debugging _why_ a settings file doesn't seem to reflect an edit you just made on disk — which, in practice, is almost always "you need `force=True` because the process already cached it."
+
+==== Why `Settings` is a class of class-methods, not an instance
+
+Notice that `Settings` is never instantiated — every method is a `@staticmethod` or `@classmethod`, and `Settings.load(...)` doesn't return a `Settings` object, it returns a plain `attrdict`. This is a deliberate choice, not an oversight:
+
+* `Settings` itself behaves as a *namespace + cache*, not as a piece of configuration. There is exactly one settings cache per process, so a class (effectively a singleton by construction, without needing singleton machinery) is the right shape.
+* The _returned_ object — the actual settings for a group — is a plain dictionary-like structure (`attrdict`, from `egse.system`) so that calling code gets ordinary dict/attribute access (`dsi_settings.RMAP_BASE_ADDRESS` or `dsi_settings["RMAP_BASE_ADDRESS"]`) without inheriting any of the loading/caching logic. Nobody should be calling `.load()` on the object they get back from `Settings.load()` — that only makes sense on the `Settings` class itself.
+
+This split — "the loader is a class, the result is a dict" — is a pattern you'll see again in `Setup` (Section 3), but with an important difference explained below: `Setup` needs a _richer_ returned object than a plain dict, because Setup values can trigger side effects on access (see `class//`, `csv//` in Section 3.3), so `Setup` couldn't get away with returning something as thin as `attrdict`.
+
+==== The Three Call Shapes of `Settings.load()`
+
+[source,python]
+----
+from egse.settings import Settings
+
+# All global + local settings
+settings = Settings.load()  # Returns full nested dict
+
+# Single group
+storage_settings = Settings.load("Storage Control Server")
+print(storage_settings.COMMANDING_PORT)  # Dot notation
+
+# Single YAML file (useful for command specs, test configs)
+commands = Settings.load(location="~/my-project", filename="commands.yaml")
+
+# Force reload (unusual; avoid if possible)
+settings = Settings.load(force=True)
+----
+
+The load method itself handles the three call shapes in three different code branches:
+
+[source,python]
+----
+@classmethod
+def load(
+    cls, group_name=None, filename="settings.yaml", location=None, *, add_local_settings=True, force=False
+) -> attrdict:
+    if group_name:
+        return cls._load_group(group_name, add_local_settings=add_local_settings, force=force)
+    elif location:
+        return cls._load_one(location=location, filename=filename, force=force)
+    else:
+        return cls._load_all(add_local_settings=add_local_settings, force=force)
+----
+
+Three branches, three private helpers, dispatched on which keyword arguments were actually passed. This is a case of routine code — a simple if/elif/else — but the _reason_ three shapes exist is worth stating, because it's a genuine design decision, not an accident of incremental feature creep:
+
+* `group_name` *only* — "give me the settings for group X from the merged entry-point configuration." This is the overwhelmingly common call in device drivers: `Settings.load("DSI")`.
+* `location` *(with optional `filename`)* — "give me settings from _this specific file_, bypass entry-points entirely." Used for one-off configuration files that don't belong to any installed package's plugin contract — e.g. loading a `command.yaml` file for a specific test script, or reading a user's private local file directly by path.
+* *Neither* — "give me everything," i.e. the merged settings from every package's entry-point, which is what the `python -m egse.settings` CLI and diagnostics use.
+
+The `add_local_settings` parameter deserves its own note: it defaults to `True`, meaning the _local_ settings file (path given by the `<PROJECT>_LOCAL_SETTINGS` environment variable, see `egse/env.py`) is layered on top of the package-shipped settings by default. This is the mechanism that lets a single test site override, say, `SITE.SSH_SERVER` without touching any installed package's YAML file. It's opt-out rather than opt-in deliberately: the common case in production is "yes, apply whatever local overrides this site has defined," and the `main()` CLI's `--global` flag is the explicit escape hatch for the rarer "show me the settings as shipped, ignore this site's overrides" diagnostic case.
+
+==== Local Settings (Site Customization)
+
+Define a local `.yaml` file (typically `~/cgse/local-settings.yaml` or a project-specific path) and set the environment variable:
+
+[source,bash]
+----
+export CGSE_LOCAL_SETTINGS=~/cgse/local-settings-lab42.yaml
+----
+
+Then call `Settings.load(add_local_settings=True)` (which is the default). Local settings are merged _after_ global settings, so they take precedence. You only need to define groups/keys that differ from the built-in defaults:
+
+[source,yaml]
+----
+# local-settings-lab42.yaml
+SITE:
+    ID: LAB42
+    SSH_SERVER: pleiades.obs.kuleuven.be
+
+Keithley Control Server:
+    HOSTNAME: hardware-rack-02
+    COMMANDING_PORT: 6920
+----
+
+==== Debugging and Inspection
+
+[source,bash]
+----
+# Print all loaded settings
+python -m egse.settings
+
+# Just local settings
+python -m egse.settings --local
+
+# Just one group
+python -m egse.settings --group "Keithley Control Server"
+----
+
+The output includes a "Memoized locations" list showing which YAML files were actually loaded.
+
+==== Common Patterns
+
+*Dynamic port allocation:* Set `PORT: 0` in your Settings YAML file; the OS then assigns an ephemeral port. Example: a control server reads `settings.COMMANDING_PORT = 0`, the OS assigns port 6920, and the server registers `service_type="MYDEVICE", port=6920` with the service registry (`reg_cs`).
+
+Clients then call `registry.discover_service("MYDEVICE")` to get the actual port. This decouples client config from server config. This is especially useful for device drivers where control servers should not allocate fixed port numbers for their services. Dynamically allocated ports are also used for testing (multiple test runs don't collide on ports).
+
+*Per-device overrides:* Nested settings allow one package to define multiple device configs (see `symetrie-hexapod/settings.yaml` with PUNA, ZONDA, JORAN under `Hexapod Controller`). Clients choose which config to use.
+
+*Environment-specific settings:* Different labs can each have their own local settings file. Deploy the same code everywhere; only the local settings file changes.
+
+==== What we deliberately left out of `Settings`
+
+No validation against a schema, no type coercion beyond what YAML gives you, no notion of "required" keys. Any of these would be reasonable additions in isolation, but `Settings` is used by every package in the ecosystem, including third-party device packages we don't control the release cycle of. A stricter contract here would mean a schema change in `cgse-common` could break settings loading for a device package that hasn't been touched in two years. The looseness is the feature, not a gap — the cost of that looseness (a typo'd key silently returns `KeyError` later, at the point of use, rather than at load time) is one we've accepted and haven't needed to revisit.
+
+=== `egse/setup.py`
+
+_Configuration that describes this specific test._
+
+==== What's fundamentally different here
+
+If `Settings` answers "how is this site configured," `Setup` answers "what was plugged in, and how was it calibrated, for this specific test." The requirements are correspondingly different:
+
+* It needs a *stable, reference-able identity* (a Setup ID) so that any dataset produced during a test can point back at exactly the configuration that was active — this is a traceability requirement, not a convenience.
+* It needs to represent *devices*, not just values — a hexapod isn't a number, it's a live object with methods, and the Setup is where "which hexapod, at which IP, using which simulator or real driver" gets decided.
+* It needs to be *navigable* by both dictionary keys and dotted attribute access, because the Setup tree can be deep (`setup.gse.hexapod.ID`) and typing `setup["gse"]["hexapod"]["ID"]` everywhere in test scripts would be painful.
+* It needs a *notion of "the current one"*, because test scripts, GUIs, and control servers all need to agree on which Setup is active right now without explicitly passing it as a parameter through every function call.
+
+Each of those four requirements maps onto a concrete piece of the implementation below.
+
+==== Built on `navdict`, not reinvented
+
+`Setup` doesn't implement dotted navigation itself — it extends `navdict` (`NavigableDict` from the `navdict` package), which provides:
+
+* Hierarchical nested dictionary structure for organizing configuration
+* Dot-notation access: `setup.gse.hexapod.ID` in addition to `setup["gse"]["hexapod"]["ID"]`
+* Special value processing via directives (see below)
+
+A Setup is typically loaded from a YAML file, navigated during a test run, and re-saved when modifications are made (e.g. after calibration improvements). The Configuration Manager (`cm_cs`) holds the current active Setup and serves it to all services on demand.
+
+[source,python]
+----
+from navdict import navdict
+from navdict.navdict import NavigableDict
+
+
+class Setup(NavigableDict): ...
+----
+
+This is a case where a piece of _generic_ functionality (navigable, YAML-backed, dot-and-bracket-accessible dictionaries) was deliberately pulled out of CGSE into its own mission-agnostic library, precisely because it has no CGSE-specific behavior in it — the CGSE-specific part is everything `Setup` adds on top: setup IDs, the `class//`/`csv//` family of special values called _directives_ (Section 3.3), site-aware file discovery, and the submit/load lifecycle.
+
+The `navdict` split is a good illustration of a general principle worth stating once, here, since it recurs across the codebase: *if a piece of code has no dependency on `egse.env`, `egse.log`, or any test-facility concept, that's a signal it belongs in its own package, not in `cgse-common`.* `cgse-common` is for things that are common _to CGSE_, not common to Python projects in general.
+
+==== Special Value Directives (`class//`, `csv//`, `yaml//`, `pandas//`, `int-enum//`)
+
+This is the part of `Setup` most likely to look like magic to someone reading it for the first time, so it's worth being explicit about the mechanism and the motivation.
+
+A Setup YAML file can contain a value like:
+
+[source,yaml]
+----
+gse:
+  hexapod:
+    ID: 42
+    device: "class//egse.hexapod.symetrie.puna.PunaSimulator"
+----
+
+and accessing `setup.gse.hexapod.device` doesn't return the _string_ `"class//egse.hexapod.symetrie.puna.PunaSimulator"` — it imports that class, instantiates it, and returns the live object. This is implemented via ``navdict``'s directive registry (`register_directive`), and `egse/setup.py` registers two CGSE-specific directives on top of whatever `navdict` provides out of the box. When you access a Setup value that begins with a special prefix, navdict automatically processes it:
+
+[cols="1,3,3"]
+|===
+| Prefix | Behavior | Example
+
+| `class//`
+| Instantiate and return the class object
+| `device: "class//egse.hexapod.symetrie.puna.PunaSimulator"` → returns a live PunaSimulator instance
+
+| `factory//`
+| Load module, call its `create()` method
+| `spline: factory//my.package.calibration.spline` → calls `spline.create()`, returns result
+
+| `csv//`
+| Load CSV file, return as numpy array
+| `coeff: "csv//calibration/gain_20250101.csv"` → numpy array of coefficients
+
+| `pandas//`
+| Load CSV file, return as pandas DataFrame
+| `trends: "pandas//historical_data.csv"`
+
+| `yaml//`
+| Load YAML file, return as dict
+| `reference: "yaml//reference_frames.yaml"`
+
+| `int-enum//`
+| Dynamically create an Enum
+| `states: "int-enum//enum.StateType"` → enum.StateType class
+|===
+
+Files are resolved relative to the configuration data location (from `<PROJECT>_CONF_DATA_LOCATION` environment variable).
+
+[source,python]
+----
+def _load_csv(value: str, parent_location: Path | None, *args, **kwargs):
+    from numpy import genfromtxt
+
+    parts = value.rsplit("/", 1)
+    [in_dir, fn] = parts if len(parts) > 1 else [None, parts[0]]
+    csv_location = get_resource_location(parent_location, in_dir)
+    try:
+        content = genfromtxt(csv_location / fn, delimiter=",", skip_header=1)
+    except FileNotFoundError as exc:
+        raise ValueError(f"Resource file not found: {value} in {csv_location}")
+    except TypeError as exc:
+        raise ValueError(f"Couldn't load resource '{value}' from {csv_location}") from exc
+    return content
+
+
+register_directive("csv", _load_csv)
+register_directive("pandas", _load_pandas)
+----
+
+*Why override `csv//` here instead of leaving ``navdict``'s default?* The docstring for `_load_csv` says it plainly: "This is a replacement of the standard `load_csv()` function from the navdict package." `navdict`, being mission-agnostic, has no reason to assume NumPy is installed or that a CSV should become a NumPy array rather than, say, a list of lists. CGSE's calibration data (temperature curves, coefficient tables) is used almost exclusively as NumPy arrays downstream, so `egse.setup` overrides the directive with one that returns `genfromtxt(...)` directly, saving every call site from having to convert. This is the general pattern for extending `navdict` from CGSE: *register CGSE-specific directives at import time of `egse.setup`, rather than forking or subclassing ``navdict``'s loader.* It keeps `navdict` clean and keeps the CGSE-specific behavior localized to one file.
+
+*Why is this dangerous, and why do we accept the danger?* A `class//` value causes arbitrary code to run — importing and instantiating a class — the moment someone _reads_ a Setup attribute. That's an unusual property for what looks like a plain configuration file, and it means Setup files are not safe to load from an untrusted source. We accept this because Setup files are generated and curated by the team, versioned, and never sourced from outside the facility — the convenience of `setup.gse.hexapod.device.homing()` working straight out of a YAML-described configuration, with no boilerplate device-instantiation code in every test script, outweighs the risk in this closed context. The docstring's own advice — _"It would however be better (more performant) to put the device object in a variable"_ — is a second, independent piece of guidance: every attribute access on a `class//` value re-triggers ``_get_attribute``'s resolution path (see `NavigableDict`), so repeated access is also a performance foot-gun, not just a style preference.
+
+*Example Setup Structure*
+
+[source,yaml]
+----
+gse:
+  hexapod:
+    device_name: "Puna Hexapod"
+    device: "class//egse.hexapod.symetrie.puna.PunaSimulator"
+    device_id: "HEX_001"
+    ID: 42
+    calibration: "csv//hexapod/calib_puna_001.csv"
+
+  power_supply:
+    device_name: "Keithley DAQ6510"
+    device: "class//egse.keithley.DAQ6510Proxy"
+    device_id: "DAQ_001"
+    gains: "pandas//keithley/gains.csv"
+    conversion: "factory//my_calibration.temperature:create_conversion_curve"
+
+instrument:
+  reference_frames: "yaml//coordinates/reference_frames.yaml"
+  detector_model: "class//my_project.imaging.DetectorModel"
+----
+
+In code, you'd access these naturally:
+
+[source,python]
+----
+setup = load_setup(setup_id=123)
+
+# Dot notation navigation
+hexapod = setup.gse.hexapod.device  # Instantiated immediately (class// directive)
+gains = setup.gse.power_supply.gains  # Loaded as pandas DataFrame
+calibration = setup.gse.hexapod.calibration  # Loaded as numpy array
+----
+
+==== The Setup ID and filename contract
+
+[source,python]
+----
+def _parse_filename_for_setup_id(filename: str) -> str | None:
+    match = re.search(r"SETUP_(\w+)_([\d]{5})_([\d]{6})_([\d]{6})\.yaml", filename)
+    try:
+        return match[2]  # match[2] is setup_id
+    except (IndexError, TypeError):
+        return None
+----
+
+Setup files follow a strict, encoded filename convention: `SETUP_<site_id>_<5-digit id>_<date>_<time>.yaml`, e.g. `SETUP_CSL_00082_210923_094458.yaml`. The identity of a Setup is derived from its *filename*, not from a field inside the YAML content. This is a design choice worth defending, because it looks backwards at first (why not just put `setup_id: 82` inside the file?):
+
+* The filename is what survives when the file is copied, emailed, attached to a ticket, or listed in a directory — the identity travels with the artifact even in contexts where nobody has opened it to read the content.
+* It makes duplication detection trivial: two files can't accidentally claim the same ID unless someone deliberately renames one, which is a much rarer mistake than a copy-pasted YAML field.
+* Setup IDs are assigned by `submit_setup_to_disk` (Section 3.7) by scanning existing filenames for the current site and taking `max(existing) + 1` — the filename _is_ the source of truth for "what's the next available ID," so it would be redundant, and a source of drift, to also track IDs inside file content.
+
+The regex is applied in two places (`_parse_filename_for_setup_id` and `disentangle_filename`) with slightly different return shapes — one returns just the ID, the other returns `(site_id, setup_id)` as a tuple. This duplication is minor and could be collapsed, but it's flagged here as exactly the kind of small thing worth cleaning up opportunistically rather than urgently: low risk, low cost, not worth a dedicated refactor PR on its own.
+
+==== `NavigableDict` subclass, not composition
+
+[source,python]
+----
+class Setup(NavigableDict):
+    def __init__(self, nav_dict: NavigableDict | dict = None, label: str = None):
+        try:
+            _filename = nav_dict.get_private_attribute("_filename")
+        except AttributeError:
+            _filename = None
+        super().__init__(nav_dict or {}, label=label, _filename=_filename)
+        try:
+            setup_id = nav_dict.get_private_attribute("_setup_id")
+            self.set_private_attribute("_setup_id", setup_id)
+        except AttributeError:
+            pass
+----
+
+Inheritance was chosen over composition (wrapping a `NavigableDict` inside a `Setup` and delegating) because `Setup` needs to _be_ a navigable dict for the dotted-attribute ergonomics to work transparently — `setup.gse.hexapod.ID` needs every intermediate node to also behave like a `NavigableDict`, and composition would require re-implementing `+__getattr__+` forwarding at every level for no benefit over what subclassing gives for free.
+
+Notice the `try/except AttributeError` pattern used twice here for copying "private attributes" (`_filename`, `_setup_id`) from an existing `NavigableDict` into the new `Setup`. This looks slightly unusual — most code would check `hasattr` or use `getattr(..., default)` — but `get_private_attribute` is a `navdict` API that raises when the attribute was never set, rather than returning `None`, so the `try/except` here is the correct idiom given that library's contract, not an inconsistency with the rest of the codebase's style.
+
+==== The Current Setup Context (`setup_ctx` as a `ContextVar`)
+
+[source,python]
+----
+setup_ctx: ContextVar[Setup | None] = ContextVar("setup", default=None)
+----
+
+[source,python]
+----
+def load_setup(setup_id: int = None, **kwargs):
+    setup = _setup_manager.load_setup(setup_id, **kwargs)
+    setup_ctx.set(setup)
+    return setup
+----
+
+`contextvars.ContextVar` rather than a plain module-level global was chosen specifically because CGSE control servers are multi-threaded (and increasingly touch `asyncio` code, e.g. the monitoring/gauge work), and a plain global would mean "the current Setup" is shared, and mutable from every thread, with no isolation. A `ContextVar` gives each thread/task its own view unless explicitly propagated, which matches the actual requirement: "the Setup currently active in _this_ context," not "the one global Setup for the whole process," even though in the overwhelmingly common single-threaded-test-script case, those two things look identical and this distinction is invisible. This is a case of paying a very small complexity cost up front to avoid a genuinely hard concurrency bug later — the value of the `ContextVar` choice doesn't show up until someone runs two things concurrently that each expect their own Setup, at which point a plain global would have produced a very confusing bug.
+
+==== Submit/load as a deliberately asymmetric pair
+
+[source,python]
+----
+def submit_setup_to_disk(setup: Setup, description: str, **kwargs) -> str | None:
+    ...
+    setup_id = (max(existing_setup_ids) + 1) if existing_setup_ids else 0
+    filename = f"SETUP_{site_id}_{setup_id:05d}_{format_datetime(fmt='%y%m%d_%H%M%S')}.yaml"
+    history = setup.get("history")
+    if not isinstance(history, dict):
+        history = {}
+        setup["history"] = history
+    history.update({f"{setup_id}": description})
+    setup.set_private_attribute("_setup_id", setup_id)
+    setup.to_yaml_file(setup_location / filename)
+    save_last_setup_id(setup_id, site_id=site_id)
+    ...
+    return f"{setup_id:05d}"
+----
+
+A few decisions bundled into this one function:
+
+* *Setups are append-only.* `submit_setup_to_disk` never rewrites an existing Setup file — it always computes the next ID and writes a new file. Combined with the `history` dict that accumulates a `{setup_id: description}` entry on every submit, this gives an audit trail for free: you can always see the chain of descriptions that led to the current configuration. This matters in an ESA test campaign context, where "what changed and why" needs to be answerable months later, possibly by someone who wasn't in the room.
+* *The rich-printed message after submission is a deliberate nudge, not decoration:*
+
+[source,python]
+----
+rich.print(
+    textwrap.dedent("""\
+    Saving setup to disk, a new setup identifier has been assigned.
+    To finalize the submit, reload the setup:
+
+    setup = load_setup()
+    """)
+)
+----
+
+Submitting a Setup and continuing to use the in-memory `setup` object you already had would silently work most of the time, but that object doesn't have the newly assigned `_setup_id` reflected consistently with what's on disk in every code path, and — more importantly — it isn't the object registered in `setup_ctx`. The explicit reminder exists because this was, in practice, a mistake people made before the message was added: submit, then keep working from the stale in-memory reference. This is worth flagging in the book precisely because it's a "brain fart" class of bug — not a logic error, a _forgot to reload_ error — and the fix was social (tell the user) rather than technical (force a reload), because forcing a reload would have meant deciding unilaterally that the caller's reference should be invalidated, which is more surprising than a printed reminder.
+
+==== `SetupManager` and the provider pattern
+
+_Designed for a dependency that might not be installed._
+
+Setups can be loaded from different sources (local disk, core-services, database, remote server, etc.) via pluggable providers. Packages register custom providers through the `cgse.extension.setup_provider` entry-point:
+
+[source,toml]
+----
+[project.entry-points."cgse.extension.setup_provider"]
+my-custom-provider = "my_package.setup:MySetupProvider"
+----
+
+The `SetupManager` loads and caches the Setup providers when the `providers` property is accessed.
+
+[source,python]
+----
+class SetupManager:
+    def __init__(self):
+        self._providers: list | None = None
+        self._default_source = "local"
+        self._discovery_lock = Lock()
+
+    @property
+    def providers(self):
+        if self._providers is None:
+            with self._discovery_lock:
+                if self._providers is None:
+                    self._providers = self._discover_providers()
+        return self._providers
+----
+
+This is double-checked locking, the classic pattern for "initialize exactly once, lazily, safely under concurrent access." It's used here, and not in most other lazy-init spots in the codebase, because `_discover_providers()` does entry-point discovery — I/O-adjacent work you don't want to repeat, and don't want two threads racing to do simultaneously the first time a Setup is requested.
+
+The reason `SetupManager` exists as an abstraction at all, rather than `load_setup` just calling `load_setup_from_disk` directly, is stated directly in the class docstring: `cgse-core` (the package providing the Configuration Manager service) is an *optional* dependency of `cgse-common`. A Setup consumer — a device package, a project package — should be able to call `load_setup()` and get sensible behavior whether or not `cgse-core` happens to be installed in that environment:
+
+[source,python]
+----
+def _discover_providers(self):
+    providers = []
+    cgse_eps = HierarchicalEntryPoints("cgse.extension")
+    for ep in cgse_eps.get_by_subgroup("setup_provider"):
+        provider_class = ep.load()
+        provider = provider_class()
+        if isinstance(provider, SetupProvider):
+            providers.append(provider)
+            if provider.can_handle("core-services"):
+                self._default_source = "core-services"
+    providers.append(LocalSetupProvider())
+    return providers
+----
+
+If `cgse-core` is installed, it registers itself as a `setup_provider` entry-point, gets discovered here, and — because it can handle `"core-services"` — becomes the default source. If it's _not_ installed, no entry-point is found, `LocalSetupProvider` (which reads Setup files straight from disk, no server involved) is the only provider, and it remains the default. No `ImportError`, no conditional `if cgse_core_installed:` branching scattered through calling code — the optionality is resolved once, here, through the same entry-point mechanism that `Settings` uses for its own decentralization (Section 2.2). This is the second appearance of the same idea in this chapter: *entry-points are CGSE's general mechanism for "this package may or may not be present, and calling code shouldn't need to know."*
+
+The `Protocol` used to define the contract:
+
+[source,python]
+----
+@runtime_checkable
+class SetupProvider(Protocol):
+    def load_setup(self, setup_id: int, **kwargs) -> Setup | None: ...
+    def submit_setup(self, setup: Setup, description: str, **kwargs) -> str | None: ...
+    def can_handle(self, source: str) -> bool: ...
+----
+
+is a structural (duck-typed) contract rather than an abstract base class that providers must inherit from. This matters because ``cgse-core``'s provider class has no compile-time or install-time dependency on `cgse-common` beyond what it already needs — it doesn't need to import an ABC from `egse.setup` and inherit from it, it just needs to implement three methods with the right names. `@runtime_checkable` lets `isinstance(provider, SetupProvider)` actually work as a sanity check at discovery time despite this being structural typing, which is the one line of "belt and braces" defensiveness against a mis-registered entry-point pointing at something that isn't really a provider.
+
+Built-in providers:
+
+* *LocalSetupProvider* — loads from disk (`<PROJECT>_CONF_DATA_LOCATION`)
+* *CoreServicesProvider* (if cgse-core is available) — loads from Configuration Manager
+
+At startup, providers are discovered via HierarchicalEntryPoints. If any provider can handle `"core-services"`, it becomes the default source; otherwise, `"local"` is default.
+
+[source,python]
+----
+# Load from explicit source
+setup = load_setup(setup_id=123, source="core-services")
+
+# Load from local disk, bypassing default source
+setup = load_setup(setup_id=123, from_disk=True)
+----
+
+==== What `Setup` borrows from `navdict`, and what stays out of this book
+
+`navdict` is its own small, mission-agnostic library with its own documentation, and it stays that way deliberately (see Section 3.2) — this book won't duplicate its internals. But a reader of `egse/setup.py` needs to recognize, at a glance, which names are `navdict`-provided versus CGSE-specific, so here's the short list of `NavigableDict`/`navdict` API that `Setup` leans on directly, with just enough of a note to keep reading without a side-trip:
+
+* `NavigableDict` *(base class)* — gives `Setup` its dict-and-dot-notation navigation (`setup["gse"]["hexapod"]` and `setup.gse.hexapod` both work) and its YAML round-tripping (`from_yaml_file` / `to_yaml_file`, both overridden in `Setup` to add the `Setup`-specific header and top-level group handling — see Section 3.5).
+* `get_private_attribute` */* `set_private_attribute` */* `has_private_attribute` — the mechanism `navdict` provides for attaching metadata to a node (like `_filename` or `_setup_id`) that isn't part of the actual configuration tree and won't show up when the Setup is printed, iterated, or serialized back to YAML. `Setup` uses this instead of ordinary attributes precisely because a ``NavigableDict``'s `+__getattr__+` is already doing double duty for navigating configuration keys — private attributes are ``navdict``'s way of keeping "data about the Setup" separate from "data in the Setup."
+* `register_directive` / the `class//`, `csv//`, `yaml//` special-value family — the plugin point `navdict` exposes for "some string values should be resolved into something else on access." `egse/setup.py` registers two CGSE-specific directives (`csv`, `pandas`) on top of whatever `navdict` ships by default (Section 3.3); it doesn't invent the mechanism.
+* `get_resource_location` — resolves a relative resource path (used inside `_load_csv` and `_load_pandas`) against the location of the Setup file itself, so calibration files can be referenced relative to the Setup rather than with absolute paths. This is ``navdict``'s answer to "where is 'here', when the YAML file describing 'here' can live at any site."
+* `+__rich__+` — `NavigableDict` already knows how to render itself as a `rich.tree.Tree`; `+Setup.__rich__+` (Section 3.5's neighbor, just below it in the file) only adds two extra leaves (`Setup ID`, `Loaded from`) on top of what the base class already draws.
+
+If you need to understand _how_ dotted navigation, directive resolution, or private attributes are implemented under the hood, that's ``navdict``'s own documentation's job, not this book's. What belongs here is only ever "which of these does `Setup` use, and why."
+
+==== Things we chose not to build into `Setup`
+
+* *No schema validation.* Same reasoning as `Settings` (Section 2.7), amplified: Setup files are written by hand or generated by scripts across four different test sites (CSL, SRON, IAS, INTA), often under time pressure during a test campaign. A hard schema would either need to be extremely permissive (defeating the purpose) or would routinely block people from saving valid, needed configuration during a TVAC campaign at 2am. We rely on code review of Setup file templates and on the `Setup.compare()` diffing method (built on `DeepDiff`) for catching unintended changes between Setup versions, rather than on upfront validation.
+* *No automatic migration between Setup schema versions.* If the shape of what lives under `gse.hexapod` changes, old Setup files don't get rewritten. This is intentional: old Setup files describe old test configurations that produced specific, already-analyzed data, and rewriting them after the fact would be rewriting history. `Setup.compare()` plus the `history` dict is the mechanism for understanding what changed and when, not a migration script.
+
+'''
+
+=== Where this leaves the CONSTANT / Settings / Setup question, concretely
+
+Bringing Section 1's table back with the mechanism now visible:
+
+* A `CONSTANT` lives as a plain module-level name because nothing in `egse.settings` or `egse.setup` needs to know it exists — there's no loading, no caching, no site- or test-specificity. If you find yourself tempted to put a constant in `settings.yaml` "just in case it needs to change later," ask whether that possible future change is a site-configuration concern or a test-configuration concern — if it's neither, it's still a constant, just maybe one that deserves a comment explaining _why_ it's fixed.
+* A value belongs in `Settings` if it would be answered the same way regardless of which Setup is currently loaded — "what SSH port does this site's server use" doesn't change between Setup 27 and Setup 82. The entry-point-based, per-package contribution model exists because this kind of value is naturally owned by whichever package defines the thing it configures.
+* A value belongs in `Setup` the moment the answer to "what's the right value" depends on _which test, which campaign, which physical configuration_ you're talking about — and the moment traceability back to a specific configuration matters for interpreting data correctly.
+
+This is also, not coincidentally, why `Settings.load()` is safe to call at import time (it's pure configuration, no side effects, cheap to cache) while `load_setup()` deliberately mutates a `ContextVar` and is never called implicitly at import time anywhere in the codebase — Setup loading is an explicit, meaningful event in a test script's life, not background plumbing.
+
+'''
+
+=== What this chapter's template gives the next chapter
+
+For every module going forward, we'll follow this shape: the problem that forced the module to exist as a separate thing, the two or three decisions that would look arbitrary without explanation, the pieces of code that look like magic or dead weight until you know the story behind them, and — explicitly — what was deliberately left out and why. Performance notes appear where we actually measured something (Section 2.4's memoization, Section 3.3's repeated-access cost), not as a boilerplate section when there's nothing to say.
+
+_(Chapter 5 covers `egse/env.py` in full — the module both `Settings` and `Setup` lean on for every environment-variable and file-location decision. Several of this chapter's "why" answers bottom out in "because of how `env.py` resolves `<PROJECT>_...` variables"; that chapter is where the mechanism itself is explained.)_
