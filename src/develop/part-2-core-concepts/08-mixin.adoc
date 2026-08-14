@@ -1,25 +1,282 @@
 == Mixin and Dynamics
 
-_Wiring the command dictionary into client classes._
+_How `@dynamic_command` and its mixins turn a decorated method into a wire round trip, with no upfront command dictionary at all._
 
 Module: `egse/mixin.py` (`cgse-core`)
 
-Chapter 7 covered how a `CommandProtocol` builds the command dictionary on the server side. This chapter covers the client-side counterpart: how that dictionary turns into real, callable methods on a `Proxy` instance at runtime, via the mixin classes defined here.
+Chapter 7 covered how a `CommandProtocol` builds the command dictionary on the server side, from a YAML command file, and how that dictionary reaches `Proxy._add_commands()` (Chapter 6) so a device method exists as a real, callable, bound method on the client. This chapter covers a second, later mechanism that solves the same underlying problem — a `Proxy` subclass needing one method per device command, without hand-writing each one — but does it without a command dictionary, a YAML file, or an upfront loading step at all. The two mechanisms coexist in the codebase today, not as an old system limping alongside its replacement, but as two deliberately different answers to two different situations, and untangling why is most of this chapter.
 
 === Why a Mixin, Not Hand-Written Methods
 
-The problem this solves: a `Proxy` subclass would otherwise need one hand-written wrapper method per device command, duplicating what's already declared in the command dictionary.
+The problem both systems solve: a device has, typically, dozens of commands. Writing one wrapper method per command on the `Controller` class, and a matching one on the `Proxy` class, means every device command exists as code in (at least) two places that have to be kept in sync by hand — the interface method's signature, ``Controller``'s implementation, and ``Proxy``'s forwarding logic. The `@dynamic_interface` mechanism (Chapter 6, `ControlServerConnectionInterface`) already showed one way to avoid the `Proxy` half of that duplication: mark an interface method as `+__dynamic_interface+`-eligible, and let `Proxy._add_commands()` bind it as a real method at construction time, using the command dictionary the control server sends over.
 
-TBW.
+That approach has a real cost, and it's the cost Chapter 6 already surfaced without naming it: `_add_commands()` only runs once, when the `Proxy` is constructed and the initial `send("send_commands")` round trip succeeds. If the control server isn't running yet at that moment, the `Proxy` gets no commands at all — every device method stays an unimplemented interface stub that raises `NotImplementedError` the moment it's called, and the only way to get real methods is to reconstruct the `Proxy` (or call `load_commands()` again by hand) once the server is actually up. For interactive or long-lived client code, that's an awkward constraint to work around: it means caring about ordering — "is my control server started yet?" — every time a `Proxy` gets constructed.
 
-=== The Mixin Classes
+`egse/mixin.py` exists to remove that ordering constraint entirely, for both sides of the connection. Its two `+__getattribute__+`-overriding mixin classes — `DynamicCommandMixin` on the `Controller`/device side, `DynamicClientCommandMixin` on the `Proxy`/client side — don't fetch or bind anything at construction time. Instead, each dynamically-marked method is resolved lazily, on every single access, by intercepting attribute lookup itself. There is no "have the commands loaded yet?" state to track, because nothing is ever loaded — a `DynamicProxy` can be constructed before its control server exists, sit there, and work correctly the moment the server comes up, with no reconnect-and-reload step required.
 
-The mixin classes `mixin.py` defines, how they attach methods and properties to a client object, and how `load_commands()` (Chapter 6) and `_add_commands()` fit together with them.
+=== The `dynamic_command()` Decorator
 
-TBW.
+Where `@dynamic_interface` (Chapter 6) does one thing — stamp a bare `+__dynamic_interface+` marker onto a method — `dynamic_command()` does much more. It's a decorator *factory*: called with keyword arguments describing how to build the on-the-wire command string and how to process the response, it returns the actual decorator, which stamps a whole family of double-underscore-prefixed static attributes onto the interface method:
+
+[source,python]
+----
+def dynamic_command(
+    *,
+    cmd_type: str,                       # required: "read", "write", "query", "transaction"
+    cmd_string: str = None,
+    cmd_string_func: Callable = None,
+    process_response: Callable = None,
+    process_cmd_string: Callable = None,
+    process_kwargs: Callable = None,
+    use_format: bool = False,
+    pre_cmd: Callable = None,
+    post_cmd: Callable = None,
+):
+    ...
+    def func_wrapper(func):
+        setattr(func, "__dynamic_interface", True)
+        setattr(func, COMMAND_TYPES[cmd_type], True)   # e.g. "__write_command"
+        if cmd_string is not None:
+            setattr(func, "__cmd_string", cmd_string)
+        ...
+        return func
+    return func_wrapper
+----
+
+`+cmd_type+` is the only required argument, and it must be one of `+"read"+`, `+"write"+`, `+"query"+`, or `+"transaction"+` — `COMMAND_TYPES` maps each to the static attribute name that will end up meaning "dispatch this way" (`+__write_command+`, `+__query_command+`, and so on). Notice `+"read"+` is the odd one out: `+dynamic_command()+` only *requires* a `+cmd_string+` (or `+cmd_string_func+`) for `+"write"+`, `+"query"+`, and `+"transaction"+` — a pure `+"read"+` command, as we'll see in a moment, never sends a command string to the device at all, it just polls.
+
+The `+cmd_string+` itself is a template, filled in from the decorated method's own arguments — two styles are supported:
+
+[source,python]
+----
+# string.Template style ($-substitution, the default)
+cmd_string="CREATE:SENS:TEMP ${name} ${type} default=${default}"
+
+# str.format style, opted into with use_format=True
+cmd_string="CREATE:SENS:TEMP {name} {type} default={default:0.4f}"
+use_format=True
+----
+
+`+process_cmd_string+` and `+process_response+` are pure functions applied, respectively, after the template is filled in (e.g. appending a line terminator) and to the raw response before it's returned to the caller. `+pre_cmd+`/`+post_cmd+` are hooks run immediately before and after the transport call itself — `+pre_cmd+` gets the device transport, the function name, the built command string, and the original arguments (and must not return anything); `+post_cmd+` gets the transport and the response, and its return value *becomes* the response, so it can post-process or replace it. `+cmd_string_func+` is an escape hatch for when a template string genuinely isn't expressive enough: a callable that builds the whole command string itself, given the method's own arguments.
+
+=== `DynamicCommandMixin`: the Controller Side
+
+[source,python]
+----
+class DynamicCommandMixin:
+    def __init__(self):
+        if not hasattr(self, "transport"):
+            raise AttributeError("Transport was not defined in sub-class of DynamicInterfaceMixin")
+
+    def __getattribute__(self, item):
+        attr = object.__getattribute__(self, item)
+        if hasattr(attr, "__dynamic_interface"):
+            attr = self.handle_dynamic_command(attr)
+        return attr
+----
+
+This is the whole trick, and it's worth reading slowly. Every attribute access on a `DynamicCommandMixin`-based object — not just method calls, *every* attribute access — goes through this `+__getattribute__+` override first. It fetches the attribute normally (`+object.__getattribute__+`, to avoid infinite recursion), and only if that attribute carries the `+__dynamic_interface+` marker does it get rerouted through `+handle_dynamic_command()+`. A method a subclass overrides with a plain, undecorated implementation never carries the marker, so it passes through untouched — this is the exact "subclass overrides statically, dynamic dispatch never fires" rule already documented for `+@dynamic_interface+` in Chapter 6, just implemented here through `+__getattribute__+` instead of a one-time binding loop.
+
+The `+__init__+` check is a real, easy-to-trip-on ordering requirement, not a formality: `DynamicCommandMixin` assumes `self.transport` — a `DeviceTransport`-shaped object providing `+write+`/`+read+`/`+query+`/`+trans+` — is *already set* by the time its own `+__init__+` runs. Since Python resolves `+super().__init__()+` calls through the MRO, a `Controller` subclass has to assign `self.transport` *before* calling `+super().__init__()+`, not after — get the order backwards and construction raises `AttributeError` immediately, from inside a mixin the subclass author may not even be looking at. (The worked example below shows this ordering in real code.)
+
+`+handle_dynamic_command()+` is where the actual work happens:
+
+[source,python]
+----
+def handle_dynamic_command(self, attr):
+    @functools.wraps(attr)
+    def command_wrapper(*args, **kwargs):
+        if hasattr(attr, "__cmd_string"):
+            cmd_str = self.create_command_string(attr, attr.__cmd_string, *args, **kwargs)
+        elif hasattr(attr, "__cmd_string_func"):
+            cmd_str = self.create_command_string(attr, attr.__cmd_string_func, *args, **kwargs)
+        else:
+            cmd_str = None
+
+        with contextlib.suppress(AttributeError):
+            attr.__pre_cmd(transport=self.transport, function_name=attr.__name__,
+                            cmd_str=cmd_str, args=args, kwargs=kwargs)
+
+        if hasattr(attr, "__write_command"):
+            self.transport.write(cmd_str)
+        elif hasattr(attr, "__read_command"):
+            response = self.transport.read()
+        elif hasattr(attr, "__query_command"):
+            response = self.transport.query(cmd_str)
+        elif hasattr(attr, "__transaction_command"):
+            response = self.transport.trans(cmd_str)
+
+        with contextlib.suppress(AttributeError):
+            response = attr.__post_cmd(transport=self.transport, response=response)
+        with contextlib.suppress(AttributeError):
+            response = attr.__process_response(response=response)
+
+        return response
+    return command_wrapper
+----
+
+(Attribute access here is written with dot-notation for readability; the real source uses `+getattr(attr, "__cmd_string")+` etc., since these names aren't ordinary Python attributes.) Notice `+self.transport.read()+` takes no `+cmd_str+` argument at all — which is exactly why `+"read"+` commands don't need a `+cmd_string+`: they're pure polling reads, nothing is sent, something is just read back. `+pre_cmd+`, `+post_cmd+`, and `+process_response+` are each wrapped in `+contextlib.suppress(AttributeError)+` rather than an `+if hasattr(...)+` check — a stylistic choice that reads slightly unusually (catching an exception as the normal path for "this hook wasn't provided"), but it's functionally identical and keeps the three optional-hook call sites visually uniform.
+
+`+create_command_string()+`, the static method that actually fills in the template, is worth a closer look because it's more capable than a single `+string.Template.substitute()+` call:
+
+[source,python]
+----
+@staticmethod
+def create_command_string(func, provider, *args, **kwargs) -> str:
+    if callable(provider):
+        cmd_string = provider(*args, **kwargs)
+    else:
+        process_kwargs = getattr(func, "__process_kwargs", expand_kwargs)
+        template = string.Template(provider)
+        sig = inspect.signature(func)
+        bound = sig.bind(*args, **kwargs)
+        variables = {...}   # bound.arguments, defaults filled in, **kwargs expanded via process_kwargs
+        if hasattr(func, "__use_format"):
+            cmd_string = provider.format(**variables)
+        else:
+            variables = {k: v.value if isinstance(v, enum.Enum) else v for k, v in variables.items()}
+            cmd_string = template.safe_substitute(variables)
+
+    if hasattr(func, "__process_cmd_string"):
+        cmd_string = func.__process_cmd_string(cmd_string)
+    return cmd_string
+----
+
+Three things worth calling out: first, it binds the call's `+*args, **kwargs+` against the *decorated method's own signature* (`+inspect.signature(func)+`), so template placeholders can refer to the method's parameter names directly, including using their declared defaults when a caller omits an optional argument. Second, `enum.Enum` values are automatically unwrapped to `+.value+` before template substitution (but only on the template path, not the `+use_format+`/callable paths) — a small, easy-to-miss asymmetry worth knowing if a command string built from an enum-typed argument looks wrong under `+use_format=True+`. Third, `+process_cmd_string+`, if present, always runs last, regardless of which of the three ways (template, `+.format()+`, or a callable provider) produced the string — it's the one universal post-processing hook.
+
+=== `DynamicClientCommandMixin`: the Proxy Side
+
+The client-side mixin shares the exact same `+__getattribute__+` interception pattern — same check for `+__dynamic_interface+`, same lazy, per-access dispatch — but `+handle_dynamic_command()+` does something entirely different once it fires, because there's no local `+self.transport+` to talk to:
+
+[source,python]
+----
+def handle_dynamic_command(self, attr):
+    @functools.wraps(attr)
+    def command_wrapper(*args, **kwargs):
+        attr_name = attr.__name__
+        inspect.signature(attr).bind(*args, **kwargs)   # validate shape only, no templating
+
+        device_method = get_function(self.__class__, attr_name)
+        cmd = ClientServerCommand(
+            name=attr_name,
+            cmd=getattr(attr, "__cmd_string", ""),
+            response=DynamicCommandProtocol.handle_device_method,
+            device_method=device_method,
+        )
+        ce = CommandExecution(cmd, *args, **kwargs)
+        return self.send(ce)
+    return command_wrapper
+----
+
+No command string is built here at all — the client only validates that the call's arguments *bind* against the interface method's signature (catching an obviously wrong call before it leaves the process), then packages the command name, the raw `+cmd_string+` template, the arguments, and a reference to `+DynamicCommandProtocol.handle_device_method+` into a `ClientServerCommand`/`CommandExecution` pair (Chapter 7) and hands the whole thing to `+self.send()+` — the same `send()` retry/reconnect machinery documented in Chapter 6. All the actual command-string construction happens on the *server* side, inside the control server's own `DynamicCommandMixin.create_command_string()` call, using the exact same `+__cmd_string+`/`+__process_cmd_string+`/etc. attributes — which only works because the interface class carrying those decorated methods is shared, unchanged, between the `Controller` and the `Proxy`. Both sides read the same markers off the same method; only what happens once a marked method is found differs.
+
+=== A Worked Example: PUNA, Old Style, and PUNA+, New Style
+
+The clearest illustration of both systems side by side isn't hypothetical — it's two real hexapod drivers already in the codebase, for closely related hardware (Chapter 4's `factory//` example already introduced the PUNA/PUNA+ distinction as a `ControllerFactory` decision point; this is the code behind that decision).
+
+`egse/hexapod/symetrie/puna.py` is the older style:
+
+[source,python]
+----
+# alpha.py
+class AlphaControllerInterface:
+    @dynamic_interface
+    def homing(self): ...
+        raise NotImplementedError
+
+# puna.py
+class PunaInterface(AlphaControllerInterface, DeviceInterface): ...
+class PunaController(PunaInterface): ...          # no DynamicCommandMixin
+class PunaProxy(Proxy, PunaInterface): ...          # plain Proxy, load_commands()
+----
+
+`egse/hexapod/symetrie/punaplus.py` is the newer style, for the PUNA+ variant of the same hexapod family:
+
+[source,python]
+----
+# dynalpha.py
+class AlphaControllerInterface(DeviceInterface):
+    @dynamic_command(cmd_type="query", cmd_string="?p${axis}",
+                      process_cmd_string=process_cmd_string, process_response=decode_axis_float)
+    def get_current_position(self, axis: int) -> float: ...
+        raise NotImplementedError
+
+# punaplus.py
+class PunaPlusInterface(AlphaPlusControllerInterface): ...
+
+class PunaPlusController(PunaPlusInterface, DynamicCommandMixin):
+    def __init__(self, hostname="127.0.0.1", port=23):
+        self.transport = self.device = AlphaPlusTelnetInterface(hostname, port)   # <1>
+        self.hostname = hostname
+        self.port = port
+        super().__init__()                                                        # <2>
+
+class PunaPlusProxy(DynamicProxy, PunaPlusInterface):
+    def __init__(self, device_id: str, *, timeout: float = PROXY_TIMEOUT):
+        self._device_id = device_id
+        super().__init__("", timeout=timeout, connect=False)
+
+    def connect_cs(self):
+        with RegistryClient() as reg:                                             # <3>
+            service = reg.discover_service(self._device_id)
+        ...
+        self._endpoint = connect_address(protocol, service["host"], service["port"])
+        super().connect_cs()
+----
+<1> `self.transport` is assigned *before* `+super().__init__()+` runs — exactly the ordering `+DynamicCommandMixin.__init__+` requires, and getting this backwards would raise `AttributeError` on construction.
+<2> This is the only line that actually invokes `+DynamicCommandMixin.__init__+`, via the MRO — everything else `PunaPlusController` needs (`+is_connected+`, `+connect+`, `+disconnect+`) is a handful of ordinary, hand-written methods that simply delegate to `self.device`, because those aren't device *commands* in the `+@dynamic_command+` sense at all.
+<3> `PunaPlusProxy` overrides `+connect_cs+` — one of the `ControlServerConnectionInterface` methods from Chapter 6 — to resolve its control server's address from the Service Registry (Chapter 10) by `+device_id+`, rather than a fixed host/port from Settings, before delegating to the inherited `+connect_cs()+` to do the actual socket work. Command dispatch (this chapter) and connection-endpoint discovery (Chapter 10) are cleanly separate concerns here, composed rather than tangled together.
+
+The interface class is small on both sides: `+PunaController+`/`+PunaProxy+` (old) and `+PunaPlusController+`/`+PunaPlusProxy+` (new) each define almost nothing themselves. Nearly the entire public command surface of a hexapod driver — `+homing+`, `+move_absolute+`, `+get_current_position+`, and dozens more — lives as decorated stubs on a shared interface class, and which mixin the `Controller`/`Proxy` pair chooses to inherit is what decides whether those stubs are resolved via a one-time dictionary fetch (old) or lazy per-access `+__getattribute__+` interception (new). Nothing about the interface class itself needs to know or care which system its `Controller`/`Proxy` pair ultimately uses.
+
+=== When Both Decorators Appear on the Same Interface Class
+
+The two systems aren't a strict "old device, old decorator; new device, new decorator" split — a single interface class can use both, deliberately. ``egse/tempcontrol/keithley/daq6510.py``'s `DAQ6510Interface` decorates most of its methods with `+@dynamic_command+` (simple SCPI query/write commands that fit a template cleanly), but a handful — `+read_buffer+`, `+clear_buffer+`, `+create_buffer+`, `+configure_sensors+`, `+setup_measurements+`, `+perform_measurement+` — carry only the bare `+@dynamic_interface+` marker, with no `+cmd_string+` at all:
+
+[source,python]
+----
+class DAQ6510Interface(DeviceInterface):
+    @dynamic_interface
+    def create_buffer(self, buffer_name: str, size: int) -> None: ...
+        raise NotImplementedError
+
+    @dynamic_command(cmd_type=CommandType.WRITE, cmd_string='TRACE:DELETE "${buffer_name}"')
+    def delete_buffer(self, buffer_name: str) -> None: ...
+        raise NotImplementedError
+
+class DAQ6510Controller(DAQ6510Interface, DynamicCommandMixin):
+    def create_buffer(self, buffer_name: str = DEFAULT_BUFFER_1, size: int = 1000) -> None:
+        ...   # a real, hand-written implementation — several transport calls, not one command string
+----
+
+`+create_buffer+` and its bare-`+@dynamic_interface+` siblings all turn out to need multi-step orchestration against the device — several distinct commands, conditional logic — that a single `+cmd_string+` template simply can't express. `DAQ6510Controller` provides an ordinary, hand-written override for every one of them. Because that override is a plain method with no `+__dynamic_interface+` marker of its own, `+DynamicCommandMixin.__getattribute__+` never intercepts it — it's exactly the "subclass overrides statically, dynamic dispatch is bypassed" rule from earlier in this chapter, just exercised for a genuinely useful reason instead of an oversight: `+@dynamic_interface+` alone is being used purely as a documentation/auto-completion stub on the interface class (the same original purpose the decorator's own docstring describes — Chapter 6), not as a request for dynamic dispatch, and the class-level override is what makes that safe. `delete_buffer` and most of the rest are simple enough to template, so they use the richer decorator and never need a hand-written body at all.
+
+One small, verified inconsistency surfaced while confirming this: `CommandType` (the `str` enum some device drivers use for `+cmd_type+`, in preference to a bare string) defines `+READ+`, `+WRITE+`, and `+TRANSACTION+` — but no `+QUERY+` member, even though `+"query"+` is a fully valid, commonly used `+cmd_type+` (`egse/hexapod/symetrie/dynalpha.py` uses `+cmd_type="query"+` throughout). Anything wanting a `+CommandType+`-typed query command has to fall back to the raw string. Harmless — `+dynamic_command()+` validates against the string-keyed `COMMAND_TYPES` dict either way — but worth a five-minute fix; logged as *P-012*.
 
 === Where This Meets `DynamicProxy`
 
-Cross-reference to the open question logged as P-008 in the Pitfalls appendix: ``Proxy``'s `load_commands()` mechanism versus ``DynamicProxy``'s `DynamicClientCommandMixin`, and whether this chapter is the place to resolve it.
+Chapter 6 flagged an open question (Pitfalls P-008): `Proxy` and `DynamicProxy` both build dynamically-commandable client objects, through two apparently parallel mechanisms, with no comment in either class explaining why both exist. `egse/protocol.py` answers this directly, in a docstring that's easy to miss because it's attached to the method that does the *least* in one of the two subclasses:
 
-TBW.
+[source,python]
+----
+class BaseCommandProtocol(DeviceConnectionObserver):
+    def send_commands(self):
+        """
+        This method will be implemented by the subclass when the protocol needs to
+        send the command definitions to the client. This is the case for the
+        CommandProtocol where the commands are decorated with `@dynamic_interface`
+        but not for the DynamicCommandProtocol where the commands are decorated
+        with `@dynamic_command`.
+        """
+        ...
+----
+
+`CommandProtocol` (Chapter 7) overrides `+send_commands()+` to actually ship its `+self._commands+` dictionary to the client — the dictionary `+Proxy._request_commands()+`/`+_add_commands()+` (Chapter 6) needs in order to bind real methods at construction time. `DynamicCommandProtocol` leaves `+send_commands()+` as the inherited no-op, because there is no dictionary to ship: a `+@dynamic_command+`-decorated interface method already carries everything a `DynamicClientCommandMixin` client needs — the command name, the `+cmd_string+` template, the type — directly as static attributes on the method itself, visible identically on both the `Controller` and `Proxy` side without any wire exchange at all.
+
+That's the resolution: `Proxy` + `CommandProtocol` + `+@dynamic_interface+` + a YAML command file is one complete, self-consistent system; `DynamicProxy` + `DynamicCommandProtocol` + `+@dynamic_command+` is a second, equally complete, equally self-consistent system, purpose-built to remove the "control server must already be running" requirement the first system carries. Neither is mid-migration debt masquerading as two systems — they're two different answers, coexisting on purpose, and which one a device driver picks is a real design choice, not an accident of when the driver happened to be written. `egse/dummy.py` (Chapter 9's worked example) uses the first system end to end; the PUNA+ and DAQ6510 drivers above use the second; `daq6510.py`, as shown, freely mixes bare `+@dynamic_interface+` stubs with `+@dynamic_command+`-decorated ones on the very same interface class, which only makes sense once both systems' actual mechanics — not just their names — are understood.
+
+What P-008 originally flagged as needing a decision is only half-resolved by this, and it's worth being precise about which half: the *relationship* between the two systems is now documented (here, and worth mirroring as a short cross-reference note on both `Proxy` and `DynamicProxy` in the source itself, so the next reader doesn't have to find this chapter to get the same answer). The other two items in that same Pitfalls entry — the `# TODO (rik): remove all methods from Proxy that are also define in the BaseProxy` comment, and the `# FIXME: Check if this is still returning the proper port` in `+get_service_proxy()+` — are unrelated cleanup items about `Proxy` specifically, not about `DynamicProxy` at all, and remain open.
+
+=== What Carries Forward
+
+Two threads left for later chapters: Chapter 7 owes a full treatment of `Command`, `CommandExecution`, and `ClientServerCommand.client_call()`/`+server_call()+` — used here only as much as needed to show what `DynamicClientCommandMixin` hands to `+self.send()+`. And Chapter 9's `egse/dummy.py` worked example, useful as it is for tying `control.py`/`proxy.py`/`command.py`/`protocol.py` together end to end, exercises only the `+@dynamic_interface+`/`Proxy`/`CommandProtocol` half of this chapter — it predates `+@dynamic_command+` and was never migrated. A reader wanting to see the `DynamicProxy`/`DynamicCommandProtocol` half exercised end to end needs a real device driver, not `dummy.py` — the PUNA+ and DAQ6510 excerpts above are the closest thing to a canonical example the codebase currently offers.
