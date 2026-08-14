@@ -1,14 +1,25 @@
 = CGSE: A Field Guide
 Rik Huygen
+:organization: KU Leuven
+:doc-nr: KUL-IVS-DM-001
 :doctype: book
 :toc: left
 :toclevels: 2
 :icons: font
 :sectnums:
-:source-highlighter: rouge
-:imagesdir: ../images
 :xrefstyle: short
+:imagesdir: ../images
+ifdef::backend-pdf[]
+:pdf-theme: cgse-book
+:pdf-themesdir: ../themes/
+:pdf-header-logo: image::cgse-logo.svg[]
+:title-logo-image: image::cgse-logo-400x400.png[Front Cover]
+:source-highlighter: rouge
+//:rouge-style: github
+endif::[]
+ifndef::backend-pdf[]
 :front-cover-image: image:cover.png[]
+endif::[]
 
 :sectnums!:
 
