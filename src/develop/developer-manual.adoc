@@ -8,11 +8,7 @@ Rik Huygen
 :source-highlighter: rouge
 :imagesdir: ../images
 :xrefstyle: short
-// :front-cover-image: image:cover.png[] -- disabled: crashes asciidoctor-pdf 2.3.10
-// on Ruby < 2.7 (this system has 2.6.10) with "undefined method `absolute_path?'
-// for File:Class" inside resolve_background_image/ink_cover_page. Re-enable once
-// Ruby is upgraded, or once a asciidoctor-pdf version compatible with Ruby 2.6 is
-// pinned. Confirmed by isolating: build succeeds cleanly with this attribute unset.
+:front-cover-image: image:cover.png[]
 
 :sectnums!:
 

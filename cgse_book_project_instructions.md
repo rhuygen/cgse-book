@@ -100,7 +100,7 @@ The author edits the manuscript as plain AsciiDoc in VS Code. Production into PD
 
 The manuscript migrated from Markdown/Pandoc to AsciiDoc/`asciidoctor-pdf` on 2026-08-14 — content unchanged, format and toolchain only. Reasons: native code-block callouts, native `[cols="..."]` table control, native captions, and native admonitions, none of which the Markdown/Pandoc pipeline could do without custom LaTeX/Lua-filter machinery. The trade-off, found during migration: AsciiDoc's inline parser has several *silent* failure modes (documented in `cgse_book_asciidoc_conventions.md`) — a clean build is not evidence the output is correct.
 
-Known environment issue: `:front-cover-image:` is disabled in `developer-manual.adoc` — it crashes `asciidoctor-pdf` 2.3.10 on Ruby < 2.7 (this environment has 2.6.10). Don't re-enable without checking the Ruby version first.
+`:front-cover-image:` is enabled in `developer-manual.adoc` and rendering correctly — it used to crash `asciidoctor-pdf` 2.3.10 on Ruby < 2.7, fixed 2026-08-14 by installing a modern Ruby via Homebrew and reinstalling the AsciiDoc gems under it (gems are per-Ruby-install).
 
 There is no ePub output anymore (the Pandoc-era build produced one; never a hard requirement). Don't assume a different export tool (Ulysses, mkdocs, etc.) unless the author explicitly asks for that instead.
 
