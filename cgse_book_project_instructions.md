@@ -67,14 +67,24 @@ STYLE — "brief for routine code, deep for tricky decisions"
 
 FORMATTING
 
-- Plain Markdown only. Standard CommonMark — no mkdocs-specific syntax (no admonitions, no wikilinks, no `{: .class}` tags), since the target editor and export tooling are not yet decided.
+- Plain Markdown only. Standard CommonMark — no mkdocs-specific syntax (no `!!! note` admonitions, no wikilinks, no `{: .class}` tags). Pandoc's own fenced-div syntax (`::: {.classname} ... :::`) is fine — see the callout-box convention below; it's a Pandoc-native extension, not an mkdocs one, and degrades gracefully to a plain `<div class="classname">` in any other renderer.
 - One paragraph, bullet, or field per physical line — no manual hard-wrapping mid-paragraph. Let the editor soft-wrap. Blank lines are the only paragraph/block separator. (This convention was originally chosen for Ulysses' editor but is being kept because it also gives cleaner, more predictable line-level diffs than arbitrary hard-wrapping — revisit if the author wants sentence-per-line instead, which gives even finer-grained diffs but is riskier to auto-generate given inline code spans, abbreviations, and version numbers throughout the text.)
 - Preserve fenced code blocks, tables, and headings exactly; only prose gets reflowed onto single lines.
 - Headings: number + short noun phrase only. No colons or em-dash explanatory clauses in headings — they wrap badly in printed output and clutter a table of contents. If a heading's hook phrase is worth keeping, add it as a short italic "deck" line directly under the heading instead.
+- **Callout boxes for non-CGSE background concepts** (e.g. "what is a Python namespace package"): wrap the explanation in a Pandoc fenced div with class `concept`, lead with a bold label, and close with one link to an authoritative external source rather than reproducing its depth inline:
 
-BOOK PRODUCTION (NOT YET DECIDED)
+  ```markdown
+  ::: {.concept}
+  **Python background: namespace packages.** ...
+  See the [Python docs](https://docs.python.org/3/reference/import.html#namespace-packages) for the full mechanism.
+  :::
+  ```
 
-The author currently edits the manuscript as plain Markdown in VS Code or a similar single-file editor — not in Ulysses, which was tried but found too complex for this stage. Final production into PDF/ePub will be figured out later (possibly Ulysses again, possibly Pandoc, possibly something else). Do not assume any particular export tool's constraints (Ulysses-specific formatting rules, a particular Pandoc filter, etc.) unless the author asks for that tool specifically at that time.
+  In the PDF build (see BOOK PRODUCTION below) this renders as a tinted, left-bordered box; the ePub build gets the same look via `epub/callouts.css`. Only for genuinely general background, not CGSE-specific explanations. First example: Chapter 3, Section 6.
+
+BOOK PRODUCTION
+
+The author edits the manuscript as plain Markdown in VS Code. Production into PDF and ePub is settled and working: `build.sh` in the cgse-book repo runs Pandoc twice — PDF via the `eisvogel` LaTeX template and `xelatex`, ePub via Pandoc's built-in ePub writer — over every `src/*/*.md` file in Part order. Custom pieces are wired in via `build.sh`: in `latex/`, `unicode-fallback.tex` (routes a few Unicode symbols Georgia can't render through LaTeX's math-mode fonts) and `callouts.tex` + `div-environments.lua` (the `concept` callout-box mechanism above, PDF side); in `epub/`, `callouts.css` (same mechanism, ePub side). Don't assume a different export tool (Ulysses, mkdocs, etc.) unless the author explicitly asks for that instead.
 
 BOOK STRUCTURE SO FAR
 

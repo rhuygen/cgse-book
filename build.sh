@@ -15,6 +15,8 @@ pandoc src/front-matter/*.md src/part-1-orientation/*.md src/part-2-core-concept
   --toc --toc-depth=2 \
   --pdf-engine=xelatex \
   --include-in-header=latex/unicode-fallback.tex \
+  --include-in-header=latex/callouts.tex \
+  --lua-filter=latex/div-environments.lua \
   -V geometry:margin=1in \
   -V mainfont="Georgia" \
   -V colorlinks=true \
@@ -25,4 +27,5 @@ echo "Building ePub file: cgse-book.epub ..."
 pandoc src/front-matter/*.md src/part-1-orientation/*.md src/part-2-core-concepts/*.md src/part-3-common-utilities/*.md src/part-4-core-services/*.md src/back-matter/*.md \
   -o cgse-book.epub \
   --metadata-file=metadata.yaml \
-  --toc --toc-depth=2
+  --toc --toc-depth=2 \
+  --css=epub/callouts.css

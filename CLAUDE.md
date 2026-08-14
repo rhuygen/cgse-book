@@ -82,7 +82,19 @@ Chapters in Part III and Part IV are grouped **thematically**, not 1:1 with modu
 
 ## Formatting
 
-- Plain Markdown only. Standard CommonMark — no mkdocs-specific syntax (no admonitions, no wikilinks, no `{: .class}` tags), since the target editor and export tooling beyond Pandoc aren't fixed yet.
+- Plain Markdown only. Standard CommonMark — no mkdocs-specific syntax (no `!!! note` admonitions, no wikilinks, no `{: .class}` tags), since the target editor and export tooling beyond Pandoc aren't fixed yet. Pandoc's own fenced-div syntax (`::: {.classname} ... :::`) is fine — see the callout-box convention below, which uses it; it's a Pandoc-native Markdown extension, not an mkdocs one, and degrades gracefully to a plain `<div class="classname">` in any other renderer.
+- **Callout boxes for non-CGSE background concepts** (e.g. "what is a Python namespace package," "what is a context manager"): wrap the explanation in a Pandoc fenced div with class `concept`, lead with a bold label, and close with one link to an authoritative external source for the reader who wants the full formal treatment — don't try to reproduce that source's depth inline. Example:
+
+  ```markdown
+  ::: {.concept}
+  **Python background: namespace packages.** A regular Python package is one
+  directory with an `__init__.py`, owned by exactly one installed distribution...
+  See the [Python docs](https://docs.python.org/3/reference/import.html#namespace-packages)
+  for the full mechanism.
+  :::
+  ```
+
+  In the PDF build this renders as a tinted, left-bordered box (styled in `latex/callouts.tex`, converted from the Div via the `latex/div-environments.lua` Pandoc filter — Pandoc does not do div-to-LaTeX-environment conversion automatically, verified directly against the pandoc binary; don't assume otherwise without re-checking). In the ePub build it gets the same tinted, left-bordered look via `epub/callouts.css`, wired in with `--css=epub/callouts.css` — Pandoc embeds the stylesheet into the ePub package and links it from every content page automatically. Only use this for genuinely general background — not for CGSE-specific explanations, which belong in normal prose where they can cross-reference other chapters. First worked example: Chapter 3, Section 6 (namespace packages).
 - One paragraph, bullet, or field per physical line — no manual hard-wrapping mid-paragraph. Let the editor soft-wrap. Blank lines are the only paragraph/block separator; this gives cleaner line-level diffs.
 - Preserve fenced code blocks, tables, and headings exactly; only prose gets reflowed onto single lines.
 - Headings: number + short noun phrase only, no colons or em-dash explanatory clauses — they wrap badly in print and clutter the ToC. If a heading's hook phrase is worth keeping, add it as a short italic "deck" line directly under the heading instead.
