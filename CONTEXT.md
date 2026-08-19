@@ -115,6 +115,32 @@ _Avoid:_ bare "setup" for this sense, since it collides with `Setup`, the
 capitalized configuration mechanism above. Always pair it with "test" or another
 qualifier (ground-support setup, deployed setup) to keep the two apart on sight.
 
+### directive (noun)
+
+A special-value prefix in a `Setup` YAML file, such as `class//` or `csv//`, that
+`navdict` resolves into something else — an instantiated object, a loaded file —
+the moment the value is read, instead of returning it as a plain string. See
+[01-settings-and-setup.adoc](src/develop/part-2-core-concepts/01-settings-and-setup.adoc),
+Section 3.3.
+
+_Avoid:_ "directive" in its ordinary English sense (an instruction, an order)
+anywhere near `Setup`, since the two readings would be easy to conflate in this
+book. Use a different word for the ordinary sense if the context is nearby.
+
+### Setup provider (noun)
+
+A pluggable component that implements the `SetupProvider` protocol in
+`egse/setup.py` and knows how to load and submit a `Setup` from one source —
+local disk (`LocalSetupProvider`) or the Configuration Manager
+(`CoreServicesProvider`). `SetupManager` discovers providers through the
+`cgse.extension.setup_provider` entry point.
+
+_Avoid:_ bare "provider" for this specific concept once `Setup provider` has
+been introduced in a chapter — the word "provider" also names an unrelated,
+ordinary-English concept elsewhere in the book (a callable that supplies a
+command-string template, in `08-mixin.adoc`), and the two must stay apart on
+sight the same way `Setup` and `test setup` do.
+
 ### Control Server (noun, capitalized)
 
 The long-running server process that owns the physical connection to one device or
