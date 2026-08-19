@@ -2,25 +2,33 @@
 
 _Where to find things, and why they live there._
 
-This chapter is the map. By the end of it you should be able to take any module name mentioned later in the book — or any module name you stumble on while reading CGSE source code — and know which package it lives in and why it's there, without _grepping_ the whole tree blind. This chapter closes out Part I. Chapter 4 onward assumes you can navigate the workspace and starts going deep on individual modules.
+This chapter is a map of the repository. It shows where things live, and why they live there.
+
+By the end of this chapter, you should know two things about any module name. You should know which package the module lives in. You should know why it lives there. This applies to any module name in this book. It also applies to any module name you find in the CGSE source code. You should not need to search the whole tree at random.
+
+This chapter closes Part I. Chapter 4 assumes you can navigate the workspace. From Chapter 4 onward, the book goes deep on individual modules.
 
 === The Monorepo Rationale
 
 _Why one `uv` workspace instead of many small repos._
 
-CGSE ships as a single repository, `IvS-KULeuven/cgse`, containing every library, every device driver, and every mission-specific package the framework has. That is a deliberate choice, not an accident of how the project happened to grow.
+A monorepo is a single repository that holds many packages. CGSE uses a monorepo, called `IvS-KULeuven/cgse`. It holds every library, every device driver, and every mission-specific package in the framework. This is a deliberate choice. It is not an accident of how the project grew.
 
-The clearest evidence of the choice is versioning: every package in the workspace — `cgse-common`, `cgse-core`, `symetrie-hexapod`, `plato-fits`, all of them — carries the exact same version number, currently `0.25.11`. A root-level script, `bump.py`, bumps every `pyproject.toml` in the workspace together in one commit; there is no per-package release cycle. That's only sensible when working within a monorepo. In a typical multi-repo setup, each downstream package pins a specific version of `cgse-common` in its own `pyproject.toml`, and that pin only moves when someone in that package's own repo decides to bump it — so `cgse-common` can ship a breaking change while a downstream package keeps running against the old, now-incompatible version indefinitely, with no CI anywhere failing to flag it. Lockstep versioning rules that out: every downstream package sits in the same repo, is exercised by the same CI run, and moves forward in the same commit or not at all. A change to a shared module's contract and the fix it forces in a downstream device driver land together, reviewed together, tested together, instead of one landing today and the other landing three weeks later when someone finally gets around to bumping a version pin.
+The clearest evidence of this choice is version numbering. Every package in the workspace carries the same version number. This includes `cgse-common`, `cgse-core`, `symetrie-hexapod`, `plato-fits`, and all the others. The current version is `0.25.11`. A root-level script, `bump.py`, updates every `pyproject.toml` file in the workspace together, in one commit. There is no separate release cycle for each package.
 
-This is also where Chapter 1's `+egse.*+` (library code) vs `+cgse_*+` (CLI/distribution) namespace split first becomes visible on disk rather than just as a principle: `libs/` and `projects/` are full of packages that each contain both an `egse/` tree and a `+cgse_*+`-or-similar tree side by side (Section 5 walks one in full). The monorepo is what makes that split practical — every package can safely assume the same `egse` namespace convention is in force everywhere else in the workspace, because everywhere else in the workspace is one `git clone` away.
+This lockstep versioning only makes sense inside a monorepo. In a typical multi-repo setup, each downstream package pins one version of `cgse-common` in its own `pyproject.toml`. That pin only moves when someone in that package's own repo decides to bump it. So `cgse-common` can ship a breaking change. A downstream package can keep running against the old, incompatible version indefinitely. No CI run anywhere will flag the problem.
 
-The trade-off is dependency footprint at development time: `uv sync` at the root resolves and locks the _entire_ workspace's dependencies into one `uv.lock`, even though any single deployed instrument PC only ever installs the one or two packages it actually needs (Section 2). That cost is paid once, by whoever works on the monorepo itself; it is not paid by a test setup that might only install `cgse-core` and `symetrie-hexapod`.
+Lockstep versioning rules this out. Every downstream package sits in the same repository. The same CI run tests every package. Every package moves forward in the same commit, or not at all. A change to a shared module's contract, and the fix it forces in a downstream device driver, land together. They are reviewed together and tested together. One fix does not land today while the other waits three weeks for someone to bump a version pin.
+
+Chapter 1 introduced a namespace split: `+egse.*+` for library code, `+cgse_*+` for CLI and distribution code. This chapter is where that split first becomes visible on disk, not just as a principle. Every package under `libs/` and `projects/` contains both an `egse/` tree and a `+cgse_*+`-style tree, side by side. Section 5 walks through one package in full. The monorepo is what makes this split practical. Every package can assume the same `egse` namespace convention holds everywhere else in the workspace, because everywhere else is one `git clone` away.
+
+This choice has one trade-off: a larger dependency footprint at development time. `uv sync`, run at the workspace root, resolves and locks the dependencies of the _entire_ workspace into one `uv.lock` file. Yet a single deployed instrument PC only installs the one or two packages it actually needs (Section 2). Someone who works on the monorepo itself pays this cost once. A test setup that installs only `cgse-core` and `symetrie-hexapod` does not pay it. This book uses "test setup" for the physical hardware at one site — not to be confused with the capitalized `Setup` configuration mechanism, covered in Chapter 4.
 
 === The `uv` Workspace
 
 _How the root `pyproject.toml` wires everything together._
 
-How the workspace is wired together lives in the root `pyproject.toml`, in two linked tables:
+A workspace, in ``uv``'s sense, is a set of packages whose dependencies `uv` resolves and locks together, as one unit. The root `pyproject.toml` file wires this workspace together, in two linked tables:
 
 [source,toml]
 ----
@@ -47,20 +55,23 @@ plato-spw = { workspace = true }
 keithley-tempcontrol = { workspace = true }                   # <3>
 lakeshore-tempcontrol = { workspace = true }                  # <3>
 symetrie-hexapod = { workspace = true }                       # <3>
+
+[tool.uv]
+default-groups = ["dev", "docs"]
 ----
-<1> The authoritative list of what counts as "in the workspace" — the four `libs/` packages are listed explicitly, while every `projects/{generic,plato,ariel,ivs}/*` glob picks up whatever package directories exist underneath.
-<2> Not read by any CGSE code — `uv` itself consumes it when resolving where a declared dependency name should come from. `{ workspace = true }` tells `uv` to resolve that name from its local path in the workspace instead of fetching a published version from PyPI. Declared here at the workspace root, these entries are inherited as the default for every workspace member; a member can override a specific entry with its own `[tool.uv.sources]`, though nothing in this workspace currently does.
-<3> Nothing in the workspace actually depends on any of these three — there's no evident reason for them being here beyond nobody having cleaned them up. Logged as P-011 in the Pitfalls appendix.
+<1> This list is the authoritative definition of what counts as part of the workspace. It names the four `libs/` packages explicitly. Each `projects/{generic,plato,ariel,ivs}/*` glob picks up every package directory that exists underneath it.
+<2> No CGSE code reads this table. `uv` itself reads it, to resolve where a declared dependency name comes from. `{ workspace = true }` tells `uv` to resolve that name from its local path in the workspace, instead of fetching a published version from PyPI. These entries are declared once, at the workspace root. Every workspace member inherits them as the default. A member can override one entry with its own `[tool.uv.sources]` table, though none currently does.
+<3> Nothing in the workspace depends on these three entries. No reason for keeping them is evident. Most likely, nobody cleaned them up. This is logged as P-011 in the Pitfalls appendix.
 
-`uv sync` (and `uv run`, which syncs implicitly) resolves the _whole_ workspace against one shared `uv.lock` at the root — every package's dependency graph is solved together, so two packages can never end up depending on incompatible versions of a third shared dependency. `default-groups = ["dev", "docs"]` means a plain `uv sync` also pulls in development and documentation tooling by default, on top of whatever each package's own runtime dependencies require.
+`uv sync` resolves the _whole_ workspace against one shared `uv.lock` file at the root. `uv run` does the same, since it syncs implicitly. Every package's dependency graph is solved together. This means two packages can never depend on incompatible versions of a third, shared dependency. The setting `default-groups = ["dev", "docs"]` has one more effect: a plain `uv sync` also installs development and documentation tooling by default, on top of each package's own runtime dependencies.
 
-One entry point deserves a mention here even though it belongs to `cgse-common`: the root-level `[project.scripts] cgse = 'cgse_common.cgse:app'` in `libs/cgse-common/pyproject.toml` is what installs the `cgse` command every reader will actually type — `cgse version`, `cgse core start`, and so on. It is the single user-facing entry point that the entry-point discovery mechanism (Section 7) assembles dynamically out of whatever packages happen to be installed.
+One entry point deserves a mention here, even though it belongs to `cgse-common`. In `libs/cgse-common/pyproject.toml`, the line `[project.scripts] cgse = 'cgse_common.cgse:app'` installs the `cgse` command that every reader will actually type: `cgse version`, `cgse core start`, and so on. This is the single user-facing entry point in the framework. The entry-point discovery mechanism, covered in Section 7, assembles its contents dynamically, from whatever packages happen to be installed.
 
 === The `libs` Directory
 
 _The shared foundation every project depends on._
 
-`libs/` holds four packages, and every one of them is meant to be a dependency for other packages, never the other way around:
+`libs/` holds four packages. Each package in `libs/` is meant to be a dependency for other packages. No package in `libs/` depends on a package outside `libs/`.
 
 .The `libs/` packages
 [cols="1,3"]
@@ -68,10 +79,10 @@ _The shared foundation every project depends on._
 | Package | What it provides
 
 | `cgse-common`
-| `Settings`, `Setup`, `env`, device I/O primitives, plugin/entry-point machinery — zero dependency on any running service
+| `Settings`, `Setup`, `env`, device I/O primitives, and plugin/entry-point machinery. Has no dependency on a running service.
 
 | `cgse-core`
-| The control-server/proxy/registry machinery that turns ``cgse-common``'s primitives into long-running, network-reachable services
+| The control-server, proxy, and registry machinery that turns ``cgse-common``'s primitives into long-running, network-reachable services.
 
 | `cgse-coordinates`
 | Coordinate systems and reference-frame transformations
@@ -80,30 +91,32 @@ _The shared foundation every project depends on._
 | Small, generic GUI building blocks shared across device-specific GUIs
 |===
 
-The `cgse-common` / `cgse-core` line is the one worth internalizing early, because this book's own Part structure mirrors it exactly: Part II (opening chapters) and Part III cover `cgse-common` — configuration, environment, device primitives, everything that has _no_ dependency on a running service — while Part II's later chapters and all of Part IV cover `cgse-core` — the client/server foundation and every deployed service built on it. "Is this a `-common` concern or a `-core` concern?" is a genuinely useful standing question to ask about any module you encounter later, not just a book-organization detail: it tracks a real architectural boundary in the code.
+Remember the line between `cgse-common` and `cgse-core`. This book's own Part structure mirrors it exactly. Part II's opening chapters and all of Part III cover `cgse-common`: configuration, environment, device primitives, and everything else that has _no_ dependency on a running service. Part II's later chapters and all of Part IV cover `cgse-core`: the client/server foundation and every deployed service built on it.
 
-`cgse-coordinates` and `cgse-gui` are named here for completeness — a reader will see them imported and should know where they live — but neither gets a dedicated chapter in this pass (Section 8).
+Ask this question about any module you meet later: is it a `-common` concern, or a `-core` concern? This is not just a book-organization detail. It tracks a real architectural boundary in the code.
+
+This chapter names `cgse-coordinates` and `cgse-gui` for completeness. A reader will see them imported and should know where they live. Neither package gets its own chapter in this pass of the book (Section 8).
 
 === The `projects` Directory
 
 _Where hardware drivers and mission-specific code live._
 
-`projects/` splits into two kinds of subdirectory, and the split is the point:
+`projects/` splits into two kinds of subdirectory. The split itself is the point:
 
-* `projects/generic/*` — one package per device or instrument, written to be usable by _any_ mission or test setup, not tied to a particular spacecraft or facility: `symetrie-hexapod` (PUNA/ZONDA/JORAN positioning hexapods), `keithley-tempcontrol`, `lakeshore-tempcontrol`, `kikusui-power-supply`, `digilent`, `aim-tti-awg`, plus `cgse-tools`, a utility package rather than a device driver.
-* `+projects/plato/*+`, `+projects/ariel/*+`, `+projects/ivs/*+` — packages specific to one mission or facility: `plato-fits`, `plato-hdf5`, `plato-spw` for PLATO; `ariel-facility`, `ariel-tcu` for ARIEL; `tvac` for IvS's own thermal-vacuum facility.
+* `projects/generic/*` — one package per device or instrument. This book calls such a package a device driver: it owns the server and client code that operate one piece of hardware (Chapter 6). Each package is written for use by _any_ mission or test setup, not tied to one spacecraft or facility. Examples: `symetrie-hexapod` (PUNA/ZONDA/JORAN positioning hexapods), `keithley-tempcontrol`, `lakeshore-tempcontrol`, `kikusui-power-supply`, `digilent`, and `aim-tti-awg`. `cgse-tools` is also here, but it is a utility package, not a device driver.
+* `+projects/plato/*+`, `+projects/ariel/*+`, `+projects/ivs/*+` — packages specific to one mission or facility. For PLATO: `plato-fits`, `plato-hdf5`, `plato-spw`. For ARIEL: `ariel-facility`, `ariel-tcu`. For IvS's own thermal-vacuum facility: `tvac`.
 
-The practical payoff of "generic": a test setup installs only the device packages it actually has hardware for — a PLATO ground-support setup with a Symétrie hexapod on the bench pulls in `symetrie-hexapod` without pulling in anything ARIEL- or IvS-specific, and if a later ARIEL test campaign also happens to use a Symétrie hexapod, it reuses the same package unmodified rather than forking a copy under `projects/ariel/`. The three-way mission split (`plato` / `ariel` / `ivs`) exists precisely because that reuse boundary stops at mission-specific concerns: FITS/HDF5 export conventions, spacecraft-specific SpaceWire handling, and facility-specific TVAC control genuinely don't generalize.
+The word "generic" has a practical payoff. A test setup installs only the device packages it actually has hardware for. Take a PLATO ground-support setup with a Symétrie hexapod on the bench: it pulls in `symetrie-hexapod`, and nothing ARIEL-specific or IvS-specific. If a later ARIEL test campaign also uses a Symétrie hexapod, it reuses the same package unmodified. It does not fork a copy under `projects/ariel/`. The three-way mission split (`plato` / `ariel` / `ivs`) exists because reuse stops at mission-specific concerns. FITS/HDF5 export conventions, spacecraft-specific SpaceWire handling, and facility-specific TVAC control do not generalize across missions.
 
-None of the packages named in this section get a standalone chapter in this pass (Section 8) — this section is inventory, so their absence later isn't a surprise, not a preview of content still to come.
+None of the packages named in this section get a standalone chapter in this pass (Section 8). This section is an inventory, not a preview of content still to come. Their absence later in the book should not be a surprise.
 
 === Anatomy of a Package
 
 _Worked example: `projects/generic/symetrie-hexapod`._
 
-One real package, walked in full, is more useful than an abstract description, and every package in the workspace follows the same shape. `symetrie-hexapod` is a good representative because it is unambiguously "generic" (Section 4) and small enough to take in from end to end.
+One real package, examined in full, teaches more than an abstract description. Every package in the workspace follows the same shape. `symetrie-hexapod` is a good example, because it is clearly "generic" (Section 4) and small enough to cover from end to end.
 
-Its `pyproject.toml` declares what the built wheel actually contains:
+Its `pyproject.toml` file declares what the built wheel actually contains:
 
 [source,toml]
 ----
@@ -111,46 +124,63 @@ Its `pyproject.toml` declares what the built wheel actually contains:
 packages = ["src/egse", "src/symetrie_hexapod"]
 ----
 
-Two packages, from one `src/` tree, shipped in one wheel:
+This wheel ships two packages from one `src/` tree:
 
-* `src/egse/hexapod/...` — the actual driver code: the PUNA/ZONDA/JORAN protocol implementations, the control-server and proxy classes for each device. This is contributed into the _shared_ `egse` namespace (Section 6), the same namespace `cgse-common` and `cgse-core` contribute into, importable as `egse.hexapod....` from anywhere in the workspace.
-* `src/symetrie_hexapod/...` — the package's own, private, never-shared surface: `settings.yaml` (device connection defaults — `HOSTNAME`, `PORT`, `CONTROLLER_TYPE` per hexapod, following the `Settings` conventions from Chapter 4), `cgse_explore.py` (a `show_processes()` function that lets `cgse explore` find this package's running processes by matching `puna|zonda|joran` against process command lines), and `cgse_services.py` (three `typer.Typer` sub-applications — `puna`, `zonda`, `joran` — each wrapping `subprocess.Popen` calls that start `egse.hexapod.symetrie.<name>_cs` as a background control-server process).
+* `src/egse/hexapod/...` — the actual driver code. This includes the PUNA/ZONDA/JORAN protocol implementations, and the control-server and proxy classes for each device. This code goes into the _shared_ `egse` namespace (Section 6), the same namespace that `cgse-common` and `cgse-core` contribute to. Any package in the workspace can import it as `egse.hexapod....`.
+* `src/symetrie_hexapod/...` — the package's own, private surface. Nothing here is ever shared with another package. It has three parts:
+** `settings.yaml` — device connection defaults (`HOSTNAME`, `PORT`, `CONTROLLER_TYPE` per hexapod), following the `Settings` conventions from Chapter 4.
+** `cgse_explore.py` — a `show_processes()` function. It lets `cgse show procs` find this package's running processes, by matching `puna|zonda|joran` against process command lines.
+** `cgse_services.py` — three `typer.Typer` sub-applications: `puna`, `zonda`, `joran`. Each one wraps a `subprocess.Popen` call that starts `egse.hexapod.symetrie.<name>_cs` as a background control-server process.
 
-None of ``symetrie_hexapod``'s own code is ever imported directly by another package. It exists solely to be _discovered_ — its `pyproject.toml` registers `cgse_explore.py` and `cgse_services.py` under `cgse.explore` and `cgse.service.device_command` entry-point groups respectively (Section 7), which is how `cgse core status` and the `cgse` CLI's `puna`/`zonda`/`joran` subcommands come into existence without `cgse-core` ever importing `symetrie_hexapod` by name.
+No other package ever imports ``symetrie_hexapod``'s own code directly. It exists to be _discovered_, not imported. Its `pyproject.toml` file registers `cgse_explore.py` under the `cgse.explore` entry-point group. It registers `cgse_services.py` under the `cgse.service.device_command` entry-point group (Section 7). This is how `cgse core status` and the `cgse` CLI's `puna`, `zonda`, and `joran` subcommands come into existence. `cgse-core` never imports `symetrie_hexapod` by name.
 
-That two-halves shape — shared `+egse.*+` driver code plus a private, entry-point-facing distribution package — is the template every package in `libs/` and `projects/` follows, not just this one.
+This two-part shape is the template every package in `libs/` and `projects/` follows, not just this one. Shared `+egse.*+` driver code sits alongside a private, entry-point-facing distribution package.
+
+Not every package in the framework follows this shape. Section 6 covers one that deliberately does not.
 
 === Naming Conventions and Navigation
 
-_Given a module name, how to find it without guessing — and where an external contributor's package should put its code instead._
+_How to find a module by name, and where an external contributor's code should go instead._
 
+[NOTE]
 .Python background: namespace packages
-NOTE: A regular Python package is one directory with an `+__init__.py+`, owned by exactly one installed distribution. A _namespace package_ (PEP 420) has no `+__init__.py+` at all — Python instead builds the package by merging every directory of that name it finds across every installed distribution on `sys.path`, at import time. That's a deliberate feature, not a workaround: it's what lets several independently-installed packages contribute to the same import path (`+egse.*+`, in CGSE's case) without any of them depending on each other or being registered anywhere central. The trade-off is exactly what this section covers below: since no single package "owns" the namespace, nothing stops two distributions from shipping a module with the same name, and Python won't warn you — whichever one happens to be imported first (or last, depending on install order) silently wins. See the https://docs.python.org/3/reference/import.html#namespace-packages[Python docs on namespace packages] for the full mechanism.
+====
+A distribution, in Python's packaging sense, is one installed package: the unit `pip` or `uv` installs, with its own `pyproject.toml` and its own version. A regular Python package is one directory with an `+__init__.py+` file, and belongs to exactly one distribution. A _namespace package_ (PEP 420) has no `+__init__.py+` file at all. Instead, at import time, Python builds the package by merging every directory of that name it finds, across every installed distribution on `sys.path`. This is a deliberate feature, not a workaround. It lets several independently-installed packages contribute to the same import path — `+egse.*+`, in CGSE's case — without depending on each other, and without any central registration.
 
-`+egse.*+` is a namespace package: many different distributions — `cgse-common`, `cgse-core`, and every device and mission package in `projects/` — each contribute their own subtree into it, and Python merges all of them into one importable `egse` package at runtime. That has a direct, practical consequence: `import egse.hexapod.symetrie.puna` succeeding tells you nothing about which distribution installed it. `+cgse_*+` (`cgse_common`, `cgse_core`, `symetrie_hexapod`, ...) is the opposite — always one distribution's own private package, never shared, never merged with anything else.
+This section covers the trade-off below. No single package "owns" the namespace. So nothing stops two distributions from shipping a module with the same name. Python gives no warning when this happens. Whichever module happens to be imported first — or last, depending on install order — silently wins. See the https://docs.python.org/3/reference/import.html#namespace-packages[Python docs on namespace packages] for the full mechanism.
+====
 
-Given a module name mentioned anywhere in this book — say `egse.dummy` — the concrete recipe for finding it is:
+`+egse.*+` is a namespace package. The packages in this monorepo contribute their own subtree into it: `cgse-common`, `cgse-core`, and every device and mission package in `projects/`. At runtime, Python merges all of them into one importable `egse` package. This has one direct, practical consequence: if `import egse.hexapod.symetrie.puna` succeeds, that success tells you nothing about which distribution installed it.
 
-[source,bash]
-----
-grep -rl "^def \|^class " --include="dummy.py" libs/*/src/egse projects/*/*/src/egse
-----
+`+cgse_*+` (`cgse_common`, `cgse_core`, `symetrie_hexapod`, and so on) is the opposite. It is always one distribution's own private package. It is never shared, and never merged with anything else.
 
-or, faster once you know roughly which area it belongs to, just check which package's `pyproject.toml` lists the relevant `src/egse/...` subtree under `[tool.hatch.build.targets.wheel].packages` (Section 5). This is also exactly what this book's own "Modules: `egse/x.py`" lines in the chapter index mean in practice — they name the module, and this chapter is what lets you turn that into a real path.
+The CGSE is deliberately designed so a new device driver does not need to merge into the `cgse` monorepo at all. This is the actual point of the entry-point discovery mechanism (Section 7): `cgse-core` finds device packages through `cgse.*` entry points, not through hard imports. So a contributor can write, package, and register a driver entirely from their own separate repository, and have it work alongside monorepo-native packages. The naming rule below follows directly from this design decision. It is not an arbitrary rule.
 
-The governance point below rests on one premise worth stating first: CGSE is deliberately designed so a new device driver doesn't require merging into the `cgse` monorepo at all. That's the actual point of the entry-point discovery mechanism (Section 7) — `cgse-core` finds device packages through `cgse.*` entry points, not hard imports, so a contributor can write, package, and register a driver entirely from their own separate repo and have it work alongside monorepo-native packages. Once that's established, the naming convention split follows as a consequence, not an arbitrary rule.
+Inside the monorepo, contributing driver code into the shared `+egse.*+` namespace works well. Everything lives in one repository, with one CI run and one set of reviewers. A name collision between two packages' `egse/` trees gets caught before it merges.
 
-Inside the monorepo, contributing driver code into the shared `+egse.*+` namespace works because everything lives in one repo — one CI run, one set of reviewers, so a name collision between two packages' `egse/` trees gets caught before it merges. But `egse` is a PEP 420 implicit namespace package: at install time, Python silently merges whatever `egse/` directories show up across every installed distribution, with no built-in check for collisions. A contributor maintaining their own device-driver repo outside the monorepo isn't part of that CI/review process — if their package also drops files under `egse.`, it could silently shadow or overwrite a module from the monorepo (or from someone else's external package), with nothing catching it. So the rule is scoped by where the package is developed, not by what kind of package it is: inside the monorepo, use `+egse.*+` for driver code as usual, the same way every package in `libs/` and `projects/` does today; outside it, don't — keep everything under your own distribution's package name instead, and rely on entry points (Section 7), not the shared namespace, to plug into CGSE.
+But `egse` is a PEP 420 implicit namespace package. At install time, Python silently merges whatever `egse/` directories it finds, across every installed distribution. There is no built-in check for collisions. A contributor who maintains a device-driver repository outside the monorepo is not part of that CI and review process. If their package also drops files under `egse.`, it could silently shadow or overwrite a module from the monorepo, or from someone else's external package. Nothing would catch it.
+
+So the rule is scoped by where a package is developed, not by what kind of package it is. Inside the monorepo, use `+egse.*+` for driver code, the same way every package in `libs/` and `projects/` does today. Outside the monorepo, do not. Keep everything under your own distribution's package name instead. When developing a CGSE plugin or extension, rely on entry points (Section 7), do not rely on the shared namespace.
+
+`cgse-dummy` is a real instance of this outside-the-monorepo case, not a hypothetical. It lives in its own repository, `IvS-KULeuven/cgse-dummy`, separate from `IvS-KULeuven/cgse`. Its `pyproject.toml` file lists `cgse-common`, `cgse-core`, and `cgse-tools` as ordinary dependencies, resolved from an installed release, not as workspace members. Its `[tool.hatch.build.targets.wheel].packages` list has only one entry, `src/cgse_dummy`. There is no `src/egse` tree at all.
+
+Everything `cgse-dummy` needs, to plug into the `cgse` CLI, it gets through entry points: `cgse.version`, `cgse.settings`, `cgse.service.example`, and `cgse.explore`. None of these require `cgse-core` or `cgse-common` to know `cgse-dummy` exists. The mechanism is the same one Section 7 covers next. Only the boundary changes: inside the monorepo, like `symetrie-hexapod`, or outside it, like `cgse-dummy`.
+
+One name collision is worth flagging here, since this book uses "dummy" twice. `cgse-dummy`, this external package, is not the same thing as `egse.dummy`, the module inside `cgse-core` covered in Chapter 9. They share a name and a purpose: both are minimal example devices. But `egse.dummy` lives inside the monorepo, and contributes to the shared `egse` namespace. `cgse-dummy` deliberately does not.
 
 === Package Discovery via Entry Points
 
-_How optional packages plug into the `cgse` CLI and `cgse-core` without being hard-imported._
+_How optional packages plug into the `cgse` CLI and `cgse-core` without a hard import._
 
-The problem entry points solve is easy to state: `cgse-core` cannot hard-import `symetrie_hexapod` — doing so would make `cgse-core` depend on every device package that might ever exist, including ones written by external contributors it has never heard of (Section 6). Entry points invert that dependency: a package _declares_, in its own `pyproject.toml`, that it provides something under a named group, and whoever wants to consume that group asks Python's packaging metadata for "everything registered under this name" at runtime, with no import-time coupling at all.
+An entry point is a name that one package registers, and another package looks up at runtime, without ever importing it directly. The problem entry points solve is easy to state. `cgse-core` cannot hard-import `symetrie_hexapod`. A hard import would make `cgse-core` depend on every device package that might ever exist, including ones written by external contributors it has never heard of (Section 6).
 
-The mechanism lives in `egse/plugin.py` (`cgse-common`), specifically `entry_points(group)` — a thin, cached wrapper around `importlib.metadata.entry_points().select(group=...)`. The `cgse` CLI's own startup code (`cgse_common/cgse.py`, `build_app()`) is the clearest example of it in action: it calls `entry_points("cgse.version")` to build ``cgse version``'s output, and `entry_points("cgse.command")` to attach any top-level command a package wants to add.
+Entry points invert that dependency. A package _registers_, in its own `pyproject.toml`, that it provides something under a named group. Whoever wants to consume that group asks Python's packaging metadata for "everything registered under this name," at runtime. There is no import-time coupling at all.
 
-The more interesting piece is `HierarchicalEntryPoints`, also in `egse/plugin.py`. Given a base group name like `"cgse.service"`, it scans _all_ installed entry points and collects every group that either equals the base group or starts with `f"{base_group}."` — so `cgse.service.core_command`, `cgse.service.device_command`, and `cgse.service.example` are all discovered automatically under the `"cgse.service"` base, with no code anywhere needing to know those specific subgroup names in advance. `build_app()` uses exactly this to mount each discovered service as a `typer.Typer` sub-application, grouped in ``cgse --help``'s output by a title derived from the subgroup's last segment (`device_command` → "Device Command", and so on). This is precisely why `symetrie-hexapod` registering a `cgse.service.device_command` entry point is enough to make `cgse puna`, `cgse zonda`, and `cgse joran` appear in the CLI — nothing in `cgse-core` or `cgse-common` was touched to add them.
+The mechanism lives in `egse/plugin.py`, part of `cgse-common`. The key function is `entry_points(group)`, a thin, cached wrapper around `importlib.metadata.entry_points().select(group=...)`. The clearest example of it in action is the `cgse` CLI's own startup code, the `build_app()` method in `cgse_common/cgse.py`. It calls `entry_points("cgse.version")` to build ``cgse version``'s output. It calls `entry_points("cgse.command")` to attach any top-level command that a package wants to add.
+
+The more interesting piece is `HierarchicalEntryPoints`, also in `egse/plugin.py`. Give it a base group name, such as `"cgse.service"`. It scans _all_ installed entry points, and collects every group that either equals the base group or starts with `f"{base_group}."`. This is how `cgse.service.core_command`, `cgse.service.device_command`, and `cgse.service.example` are all discovered automatically under the `"cgse.service"` base. No code anywhere needs to know those specific subgroup names in advance.
+
+`build_app()` uses this to mount each discovered service as a `typer.Typer` sub-application. In ``cgse --help``'s output, each one is grouped under a title derived from the subgroup's last segment: `device_command` becomes "Device Command," and so on. This is precisely why `symetrie-hexapod` registering a `cgse.service.device_command` entry point is enough to make `cgse puna`, `cgse zonda`, and `cgse joran` appear in the CLI. Nothing in `cgse-core` or `cgse-common` was touched to add them.
 
 The entry-point groups actually in use across the workspace today:
 
@@ -180,12 +210,12 @@ The entry-point groups actually in use across the workspace today:
 | Per-device subcommands
 
 | `cgse.service.example`
-| `cgse-tools`
+| `cgse-tools`, `cgse-dummy`
 | Reference example of the pattern
 
 | `cgse.explore`
 | most packages
-| Process discovery for `cgse core status`
+| Process discovery for `cgse show procs`
 
 | `cgse.resource`
 | `cgse-core`, `cgse-gui`
@@ -204,10 +234,14 @@ The entry-point groups actually in use across the workspace today:
 | Storage-format plugins (Chapter 18)
 |===
 
-The full mechanics of how these groups are loaded, cached, and made robust against a broken plugin (`load_plugins_ep`, `broken_command`) belong to ``egse/plugin.py``'s own treatment in Part III — this section's job is only to explain what the mechanism is for and where the wiring is declared, since Section 5's worked example and every later services chapter in Part IV assume the reader already has this picture.
+Part III covers the full mechanics: how these groups are loaded, cached, and made robust against a broken plugin (`load_plugins_ep`, `broken_command`). That belongs to ``egse/plugin.py``'s own treatment there. This section's job is smaller: to explain what the mechanism is for, and where the wiring is declared. Section 5's worked example, and every later services chapter in Part IV, assume the reader already has this picture.
 
 === Scope of This Book
 
-_What's covered in depth, what's deliberately out._
+_What this book covers in depth, and what it leaves out on purpose._
 
-This book covers `cgse-common` (Part II's opening chapters and all of Part III) and `cgse-core` (the remainder of Part II and all of Part IV) in depth. `cgse-coordinates`, `cgse-gui`, the generic device-driver projects (`symetrie-hexapod`, `keithley-tempcontrol`, `lakeshore-tempcontrol`, `kikusui-power-supply`, `digilent`, `aim-tti-awg`, `cgse-tools`), and the mission-specific projects (`plato-fits`, `plato-hdf5`, `plato-spw`, `ariel-facility`, `ariel-tcu`, `tvac`) are named and located here (Sections 3–4) so a reader isn't left wondering why, say, `symetrie-hexapod` never gets its own chapter — but none of them are drafted as standalone chapters in this pass. link:../../../cgse_book_chapter_index.md[cgse_book_chapter_index.md] is the authoritative, current inventory of what's drafted versus still TBW; consult it for the current list — this section only explains why the boundary is drawn where it is.
+This book covers `cgse-common` in depth: Part II's opening chapters, and all of Part III. It also covers `cgse-core` in depth: the remainder of Part II, and all of Part IV.
+
+This chapter names and locates several other packages (Sections 3–4): `cgse-coordinates`, `cgse-gui`; the generic device-driver projects `symetrie-hexapod`, `keithley-tempcontrol`, `lakeshore-tempcontrol`, `kikusui-power-supply`, `digilent`, `aim-tti-awg`, `cgse-tools`; and the mission-specific projects `plato-fits`, `plato-hdf5`, `plato-spw`, `ariel-facility`, `ariel-tcu`, `tvac`. This is so a reader is not left wondering why, say, `symetrie-hexapod` never gets its own chapter. None of them are drafted as standalone chapters in this pass.
+
+link:../../../cgse_book_chapter_index.md[cgse_book_chapter_index.md] is the authoritative, current inventory of what is drafted and what is still TBW. Consult it for the current list. This section only explains why the boundary is drawn where it is.
