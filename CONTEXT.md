@@ -160,6 +160,19 @@ class in `egse/proxy.py`.
 _Avoid:_ "client" as a synonym. "Client" is fine for the general role (some process
 acting as a client), but the specific object is always "Proxy."
 
+### Configuration Manager (noun, capitalized)
+
+The CGSE service that holds the current active `Setup` and serves it to every
+other service on demand. Implemented as a `ControlServer` subclass; see
+`egse/setup.py`'s `CoreServicesProvider`, one of the pluggable `Setup provider`s
+that can load a `Setup` from this service instead of from local disk.
+
+_Avoid:_ bare "configuration" or "configuration manager" (lowercase) for this
+specific service, since "configuration data location" and "configuration
+repository" also appear near it in prose about `egse/env.py` and name different,
+unrelated things (a file path, a git working copy). Repeat "Configuration
+Manager" once it has been introduced in a chapter.
+
 ### Service Registry (noun, capitalized)
 
 The CGSE service that lets a Control Server register itself, and a Proxy discover
