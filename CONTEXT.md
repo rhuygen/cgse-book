@@ -173,6 +173,16 @@ repository" also appear near it in prose about `egse/env.py` and name different,
 unrelated things (a file path, a git working copy). Repeat "Configuration
 Manager" once it has been introduced in a chapter.
 
+### Storage Manager (noun, capitalized)
+
+The CGSE service that receives and stores housekeeping and other runtime data from
+every other service. Implemented as a `ControlServer` subclass, alongside the
+Configuration Manager.
+
+_Avoid:_ bare "storage manager" (lowercase) for this specific service, for the same
+reason as `Configuration Manager` above. Repeat "Storage Manager" once it has been
+introduced in a chapter.
+
 ### Service Registry (noun, capitalized)
 
 The CGSE service that lets a Control Server register itself, and a Proxy discover
