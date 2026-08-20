@@ -126,8 +126,8 @@ packages = ["src/egse", "src/symetrie_hexapod"]
 
 This wheel ships two packages from one `src/` tree:
 
-* `src/egse/hexapod/...` — the actual driver code. This includes the PUNA/ZONDA/JORAN protocol implementations, and the control-server and proxy classes for each device. This code goes into the _shared_ `egse` namespace (Section 6), the same namespace that `cgse-common` and `cgse-core` contribute to. Any package in the workspace can import it as `egse.hexapod....`.
-* `src/symetrie_hexapod/...` — the package's own, private surface. Nothing here is ever shared with another package. It has three parts:
+* `+src/egse/hexapod/...+` — the actual driver code. This includes the PUNA/ZONDA/JORAN protocol implementations, and the control-server and proxy classes for each device. This code goes into the _shared_ `egse` namespace (Section 6), the same namespace that `cgse-common` and `cgse-core` contribute to. Any package in the workspace can import it as `+egse.hexapod....+`.
+* `+src/symetrie_hexapod/...+` — the package's own, private surface. Nothing here is ever shared with another package. It has three parts:
 ** `settings.yaml` — device connection defaults (`HOSTNAME`, `PORT`, `CONTROLLER_TYPE` per hexapod), following the `Settings` conventions from Chapter 4.
 ** `cgse_explore.py` — a `show_processes()` function. It lets `cgse show procs` find this package's running processes, by matching `puna|zonda|joran` against process command lines.
 ** `cgse_services.py` — three `typer.Typer` sub-applications: `puna`, `zonda`, `joran`. Each one wraps a `subprocess.Popen` call that starts `egse.hexapod.symetrie.<name>_cs` as a background control-server process.
@@ -176,7 +176,7 @@ An entry point is a name that one package registers, and another package looks u
 
 Entry points invert that dependency. A package _registers_, in its own `pyproject.toml`, that it provides something under a named group. Whoever wants to consume that group asks Python's packaging metadata for "everything registered under this name," at runtime. There is no import-time coupling at all.
 
-The mechanism lives in `egse/plugin.py`, part of `cgse-common`. The key function is `entry_points(group)`, a thin, cached wrapper around `importlib.metadata.entry_points().select(group=...)`. The clearest example of it in action is the `cgse` CLI's own startup code, the `build_app()` method in `cgse_common/cgse.py`. It calls `entry_points("cgse.version")` to build ``cgse version``'s output. It calls `entry_points("cgse.command")` to attach any top-level command that a package wants to add.
+The mechanism lives in `egse/plugin.py`, part of `cgse-common`. The key function is `entry_points(group)`, a thin, cached wrapper around `+importlib.metadata.entry_points().select(group=...)+`. The clearest example of it in action is the `cgse` CLI's own startup code, the `build_app()` method in `cgse_common/cgse.py`. It calls `entry_points("cgse.version")` to build ``cgse version``'s output. It calls `entry_points("cgse.command")` to attach any top-level command that a package wants to add.
 
 The more interesting piece is `HierarchicalEntryPoints`, also in `egse/plugin.py`. Give it a base group name, such as `"cgse.service"`. It scans _all_ installed entry points, and collects every group that either equals the base group or starts with `f"{base_group}."`. This is how `cgse.service.core_command`, `cgse.service.device_command`, and `cgse.service.example` are all discovered automatically under the `"cgse.service"` base. No code anywhere needs to know those specific subgroup names in advance.
 

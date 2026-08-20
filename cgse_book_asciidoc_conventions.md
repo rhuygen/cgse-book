@@ -66,6 +66,28 @@ Where:: `+ControlServer.__init__+`, the `self.poller.register(...)` line
 
 **When this matters:** any inline (not fenced-code-block) mention of a Python dunder — `__init__`, `__eq__`, `__bool__`, `__getattr__`, `__rich__`, `__init__.py`, etc. This is extremely common in a Python codebase book. Fenced `[source,python]` blocks are unaffected — the bug is specific to inline backtick spans in prose.
 
+### 5. Three literal dots inside a monospace span render as a typographic ellipsis
+
+**The bug:** AsciiDoc's built-in "replacements" substitution turns three literal periods (`...`) into a single Unicode ellipsis character (`…`) by default — and this runs even inside an inline monospace span, not only in plain prose. A code-like fragment such as `` `.../log` `` or `` `with env_var(...):` `` renders with `…` in place of the literal `...`, silently changing what looks like real code.
+
+Confirmed example (`asciidoctor-pdf`, this book's theme):
+
+```asciidoc
+The log file location falls back to `.../log` the same way.
+```
+
+renders as "falls back to `⋯/log`" — three periods become one ellipsis glyph, with no warning at build time.
+
+**The fix:** use the passthrough monospace form, `` `+text+` ``, for any inline code span whose content contains a literal `...`:
+
+```asciidoc
+The log file location falls back to `+.../log+` the same way.
+```
+
+**When this matters:** any inline mention of Python's `...` (Ellipsis literal, a truncated call like `+Settings.load(...)+`, or a truncated path like `+.../log+`) written as a short prose aside rather than inside a fenced code block. Fenced `[source,...]` blocks are unaffected — this is specific to inline backtick spans in prose. A table cell that uses `...` as ordinary punctuation (not code) is also unaffected — the ellipsis glyph is the correct rendering there, nothing to fix.
+
+Found 2026-08-19 while rewriting Chapter 5. The same bug was already present, unfixed, in the published Chapter 3 (`` `+importlib.metadata.entry_points().select(group=...)+` ``) and Chapter 4 (`` `+Settings.load(...)+` ``, `` `+getattr(..., default)+` ``, `` `+<PROJECT>_...+` ``) — all four corrected 2026-08-20.
+
 ## Style rules
 
 ### Don't combine inline code and bold
