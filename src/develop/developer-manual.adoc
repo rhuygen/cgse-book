@@ -93,4 +93,6 @@ include::part-4-core-services/08-the-cgse-cli.adoc[]
 
 :sectnums!:
 
+include::back-matter/02-faq.adoc[]
+
 include::back-matter/01-appendix-pitfalls-cleanup-backlog.adoc[]

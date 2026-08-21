@@ -53,6 +53,7 @@ cgse-book/
         (more chapters land here as they're written, one file per chapter,
          numbered in reading order within its Part folder)
       back-matter/
+        02-faq.adoc
         01-appendix-pitfalls-cleanup-backlog.adoc
 
 Each chapter is a self-contained AsciiDoc file: `==` for the chapter title, `===` for top-level sections, `====` for subsections — no manual "Chapter N" or "N.M" numbers in heading text, since `developer-manual.adoc` sets `:sectnums:` and AsciiDoc's book doctype numbers every heading automatically (manual numbers double up with this — a confirmed bug, see the conventions file). Do not merge multiple chapters into one file. Part headings (`=`) and `include::` directives live only in `developer-manual.adoc`, never in individual chapter files.

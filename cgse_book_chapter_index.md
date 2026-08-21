@@ -60,7 +60,9 @@ A full skeleton was scaffolded on 2026-08-12, covering Parts I–IV (orientation
 - Ch. 23 `07-monitoring-observation-async-servers.adoc` — `egse/monitoring.py`, `egse/observation.py`, `egse/async_control.py`, `egse/async_dummy.py`, `egse/async_temp.py`, `egse/temperature_profile.py`, `egse/_setup_core.py`
 - Ch. 24 `08-the-cgse-cli.adoc` — `cgse_core/_start.py`, `_status.py`, `_stop.py`, `cgse_explore.py`, `cgse_core/services.py`, `egse/services.py`
 
-## Running appendix
+## Back matter
+
+**FAQ** (`src/develop/back-matter/02-faq.adoc`) — short questions with short answers, each pointing to the chapter section with the full story. Two questions drafted so far: registering a directive plugin at runtime via `register_directive` (points to Ch. 4, Section 3.4, "Special Value Directives"), and resetting a memoized settings key (points to Ch. 4, Section 3.3, "Memoization in `read_configuration_file`"). Grow this incrementally as recurring questions surface.
 
 **Pitfalls & Cleanup Backlog** (`src/develop/back-matter/01-appendix-pitfalls-cleanup-backlog.adoc`) — currently P-001 through P-011.
 
@@ -117,6 +119,7 @@ cgse-book/
         07-monitoring-observation-async-servers.adoc  (Ch. 23, TBW)
         08-the-cgse-cli.adoc                          (Ch. 24, TBW)
       back-matter/
+        02-faq.adoc                                   (FAQ)
         01-appendix-pitfalls-cleanup-backlog.adoc
 ```
 

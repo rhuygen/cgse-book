@@ -1,0 +1,17 @@
+== Frequently Asked Questions
+
+_Short questions. Shorter answers. Each answer points to the chapter with the
+full story._
+
+=== How do I register a new directive at runtime?
+
+Call `register_directive(name, func)`, from ``navdict``'s directive module.
+This adds a new `Setup` directive, such as `class//` or `csv//`, to the
+running process immediately. No entry point and no restart is needed. See
+Chapter 4, Section 3.4, "Special Value Directives."
+
+=== How do I reset a memoized settings key?
+
+You cannot reset one key. `Settings.clear_memoized()` clears the whole cache,
+for every settings file. To force one file to reload, call `Settings.load(filename, force=True)`
+instead. See Chapter 4, Section 3.3, "Memoization in `read_configuration_file`."
