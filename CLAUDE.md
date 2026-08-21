@@ -28,34 +28,6 @@ Before starting or resuming any chapter, check the current state of that file in
 
 ## Repo layout
 
-```
-cgse-book/
-  CLAUDE.md                             (this file)
-  cgse_book_project_instructions.md     (Claude Projects equivalent of this file)
-  cgse_book_chapter_index.md            (file-by-file ToC, kept up to date)
-  cgse_book_asciidoc_conventions.md     (AsciiDoc parser gotchas + house style — read before converting/drafting)
-  build.sh                              (builds cgse-book.pdf via asciidoctor-pdf)
-  TODO.md                               (author's local scratch list — gitignored, not pushed; check it, don't duplicate its contents here since it changes often)
-  src/
-    images/                             (shared assets — logo, cover — used via :imagesdir:)
-    themes/
-      cgse-book-theme.yml                (asciidoctor-pdf theme, extends: default)
-    develop/                             (this manual; a future sibling, e.g. an operator guide, would get its own sibling folder here)
-      developer-manual.adoc              (master doc — includes everything below via include::)
-      front-matter/
-        01-title-verso.adoc
-        02-about.adoc
-        03-preface.adoc
-        04-acknowledgments.adoc
-        05-acronyms.adoc
-      part-1-orientation/                Ch. 1-3
-      part-2-core-concepts/              Ch. 4-10 — the client/server foundation
-      part-3-common-utilities/           Ch. 11-16 — remaining cgse-common modules
-      part-4-core-services/              Ch. 17-24 — cgse-core middleware services
-      back-matter/
-        01-appendix-pitfalls-cleanup-backlog.adoc
-```
-
 See [cgse_book_chapter_index.md](cgse_book_chapter_index.md) for the full file-by-file breakdown, including which chapters are drafted vs. TBW placeholders. This layout (a `develop/` folder for this manual, shared `themes/`/`images/` one level up) mirrors the precedent in `IvS-KULeuven/plato-cgse-doc`, which hosts several manuals side by side under one `src/` tree — a future sibling manual (e.g. an operator/expert-user guide, discussed but not started) would slot in as `src/operator/` without disturbing this one.
 
 **Numbering convention:** file numbers restart at `01` within each Part folder. Chapter and section numbers are **not** written into the Markdown-era way anymore — `developer-manual.adoc` sets `:sectnums:`, and AsciiDoc's book doctype numbers every `==`/`===`/`====` heading automatically (including prepending the word "Chapter" to `==`-level headings). Do not add manual "Chapter N" or "N.M" prefixes to heading text — they double up with the automatic numbering (confirmed bug, see gotcha #4 in `cgse_book_asciidoc_conventions.md`). Cross-references in prose ("see Section 7") stay as plain text, not live AsciiDoc xrefs, matching the book's existing style.
@@ -111,17 +83,7 @@ Chapters in Part III and Part IV are grouped **thematically**, not 1:1 with modu
 
 ## Building the book
 
-`build.sh` runs one `asciidoctor-pdf` invocation over `src/develop/developer-manual.adoc`, which pulls in every chapter via `include::`. Adding a chapter means adding one `include::` line to `developer-manual.adoc` (in the right Part), not touching `build.sh` — unlike the old Pandoc pipeline, which globbed Part folders directly.
-
-```bash
-bash build.sh
-```
-
-No `PATH` prefix needed — `asciidoctor-pdf` doesn't depend on a separate TeX install the way the old Pandoc/xelatex pipeline did.
-
-**Resolved environment issue (2026-08-14):** `:front-cover-image:` used to crash `asciidoctor-pdf` 2.3.10 on this machine's old system Ruby (2.6.10, `/usr/bin/ruby`) with `undefined method 'absolute_path?' for File:Class` — that method needs Ruby ≥ 2.7. Fixed by installing a modern Ruby via Homebrew (`brew install ruby`, then adding `/opt/homebrew/opt/ruby/bin` ahead of the system Ruby on `PATH` in `.zshrc`) and reinstalling the gems under it (`gem install asciidoctor asciidoctor-pdf asciidoctor-tabs rouge` — gems are per-Ruby-install, so this step is easy to forget after a Ruby upgrade). `:front-cover-image:` is now enabled in `developer-manual.adoc` and confirmed rendering correctly. One thing worth knowing if this ever needs re-diagnosing: a non-interactive shell (e.g. one Claude Code drives) may not source `.zshrc`'s `PATH` changes the way an interactive terminal does — if `ruby -e 'puts RUBY_VERSION'` still shows 2.6.10 in such a shell after the upgrade, that's most likely why; invoking the new Ruby/gem by its full path (or checking `gem environment` for `EXECUTABLE DIRECTORY`) sidesteps it. `bash build.sh` from the user's own interactive terminal is unaffected.
-
-`cgse-book.pdf` is a gitignored build output — rebuild locally to verify a change, don't expect it to exist or to be committed. There is no ePub output anymore (the Pandoc-era build produced one; ePub was never a hard requirement, and reproducing it under AsciiDoc — `asciidoctor-epub3` — hasn't been set up. Revisit if actually needed.)
+See the `build-book` skill for the build command, the gitignored PDF output, and a resolved Ruby/PATH environment gotcha worth knowing if the build ever breaks again.
 
 ## Acknowledgments
 
