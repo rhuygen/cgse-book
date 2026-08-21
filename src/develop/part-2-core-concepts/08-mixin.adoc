@@ -6,14 +6,14 @@ Module: `egse/mixin.py` (`cgse-core`)
 
 Chapter 7 showed one way to turn a device command into a real method. A `CommandProtocol` builds a command dictionary from a YAML file, on the server side. `Proxy._add_commands()` (Chapter 6) then binds each dictionary entry as a real, callable method on the client. This chapter covers a second way to solve the same problem: a `Proxy` needs one method per device command, without a hand-written wrapper for each one. This second way builds no dictionary, reads no YAML file, and runs no load step at all.
 
-Both mechanisms exist in the codebase today. Neither is an old system waiting to be replaced. They are two different answers to two different situations, and most of this chapter explains why.
+Both mechanisms exist in the codebase today. Neither is a leftover from an earlier design, kept only until someone removes it. They are two different answers to two different situations, and most of this chapter explains why.
 
 [NOTE]
 .Python background: overriding `+__getattribute__+`
 ====
-Python calls `+object.__getattribute__(obj, name)+` every time code reads `obj.name` — for a method call, a plain attribute, or a property. A class can override this method and intercept every such read. Both mixins in this chapter use that override to detect a decorated method and reroute it, instead of binding real methods once, up front. See the
+Python calls `+object.__getattribute__(obj, name)+` every time code reads `obj.name` — for a method call, a plain attribute, or a property. A class can override this method and intercept every such read. Both mixins in this chapter use that override to detect a decorated method and reroute it, rather than bind real methods once, up front. See the
 https://docs.python.org/3/reference/datamodel.html#object.__getattribute__[Python data model docs]
-for the full mechanism, including the recursion trap this chapter's code avoids by calling `+object.__getattribute__+` directly.
+for the full mechanism. Those docs also cover a recursion trap: this chapter's code avoids it with a direct call to `+object.__getattribute__+`.
 ====
 
 === Why a Mixin?
@@ -24,7 +24,7 @@ A device has, in practice, dozens of commands. A wrapper method per command, on 
 
 Chapter 6 already showed one fix for half of this problem: `@dynamic_interface`. A developer marks an interface method as dynamic. `Proxy._add_commands()` then binds it as a real method, at construction time. It uses the command dictionary the Control Server sends over.
 
-That fix has a real cost, and Chapter 6 already surfaced it without naming it. `_add_commands()` runs only once: when the `Proxy` is constructed, and its first `send("send_commands")` request succeeds. If the Control Server is not running yet at that moment, the `Proxy` gets no commands at all. Every device method then stays an unimplemented stub. It raises `NotImplementedError` the moment a caller calls it. The only fix is to reconstruct the `Proxy`, or call `load_commands()` again by hand, once the server is actually up. For interactive or long-running client code, this is an awkward constraint: a developer must track startup order every time a `Proxy` gets constructed.
+That fix has a real cost. Chapter 6 already surfaced this cost, but never named it. `_add_commands()` runs only once: when the `Proxy` is constructed, and its first `send("send_commands")` request succeeds. If the Control Server is not running yet at that moment, the `Proxy` gets no commands at all. Every device method then stays an unimplemented stub. It raises `NotImplementedError` the moment a caller calls it. The only fix is to reconstruct the `Proxy`, or call `load_commands()` again by hand, once the server is actually up. For interactive or long-running client code, this is an awkward constraint: a developer must track startup order every time a `Proxy` gets constructed.
 
 `egse/mixin.py` removes this constraint, for both sides of the connection. It defines two mixin classes: `DynamicCommandMixin`, on the `Controller`/device side, and `DynamicClientCommandMixin`, on the `Proxy`/client side. A *mixin*, here, is a class meant to be combined with another class through inheritance, not used on its own — it adds behavior, not a complete object. Neither mixin fetches or binds anything at construction time. Instead, each mixin overrides `+__getattribute__+` (see the callout above) and resolves a dynamically marked method lazily, on every single access. There is no "have the commands loaded yet?" state to track, because nothing is ever loaded ahead of time. A `DynamicProxy` can be constructed before its Control Server exists, sit idle, and work correctly the moment the server starts — with no reconnect step required.
 
@@ -170,7 +170,7 @@ def create_command_string(func, provider, *args, **kwargs) -> str:
     return cmd_string
 ----
 
-Three details are worth calling out:
+Three details matter here:
 
 . It binds the call's `+*args, **kwargs+` against the *decorated method's own signature* (`+inspect.signature(func)+`). A template placeholder can therefore refer to a method parameter name directly, and fall back to that parameter's declared default when a caller omits it.
 . An `+enum.Enum+` value is unwrapped to its `+.value+` automatically, before template substitution — but only on the template path, not the `+use_format+`/callable paths. This asymmetry is easy to miss; a command string built from an enum-typed argument can look wrong under `+use_format=True+` if a reader does not know it.
@@ -269,7 +269,7 @@ class PunaPlusProxy(DynamicProxy, PunaPlusInterface):
         self._endpoint = connect_address(protocol, service["host"], service["port"])
         super().connect_cs()
 ----
-<1> `self.transport` is assigned *before* `+super().__init__()+` runs — exactly the order `+DynamicCommandMixin.__init__+` requires. Reversing it raises `AttributeError` at construction.
+<1> `self.transport` is assigned *before* `+super().__init__()+` runs — exactly the order `+DynamicCommandMixin.__init__+` requires. Reverse the order, and construction raises `AttributeError`.
 <2> This is the only line that actually invokes `+DynamicCommandMixin.__init__+`, through the method resolution order. Everything else `PunaPlusController` needs — `+is_connected+`, `+connect+`, `+disconnect+` — is a handful of ordinary, hand-written methods that delegate to `self.device`, because those are not device *commands* in the `+@dynamic_command+` sense.
 <3> `PunaPlusProxy` overrides `+connect_cs+` — one of the `ControlServerConnectionInterface` methods from Chapter 6 — to resolve its Control Server's address from the Service Registry (Chapter 10) by `+device_id+`, instead of a fixed host and port from Settings, before it delegates to the inherited `+connect_cs()+` for the actual socket work. Command dispatch (this chapter) and connection-endpoint discovery (Chapter 10) stay cleanly separate here, composed rather than tangled together.
 
@@ -327,7 +327,7 @@ class BaseCommandProtocol(DeviceConnectionObserver):
 
 `CommandProtocol` (Chapter 7) overrides `+send_commands()+` to ship its `+self._commands+` dictionary to the client — the same dictionary `+Proxy._request_commands()+`/`+_add_commands()+` (Chapter 6) needs, to bind real methods at construction time. `DynamicCommandProtocol` leaves `+send_commands()+` as the inherited no-op, because there is no dictionary to ship. A `+@dynamic_command+`-decorated interface method already carries everything a `DynamicClientCommandMixin` client needs — the command name, the `+cmd_string+` template, the type — as static attributes on the method itself. Both the `Controller` and the `Proxy` see the same attributes, with no wire exchange required to get them there.
 
-That is the resolution: `Proxy` + `CommandProtocol` + `+@dynamic_interface+` + a YAML command file is one complete, self-consistent system. `DynamicProxy` + `DynamicCommandProtocol` + `+@dynamic_command+` is a second, equally complete system, built to remove the "Control Server must already be running" requirement the first system carries. Neither is migration debt disguised as two systems. They are two different answers, coexisting on purpose. Which one a device driver picks is a real design choice, not an accident of when the driver happened to be written. `egse/dummy.py` (Chapter 9's worked example) uses the first system end to end. The PUNA+ and DAQ6510 drivers above use the second. `daq6510.py` freely mixes bare `+@dynamic_interface+` stubs with `+@dynamic_command+`-decorated ones on the same interface class — which only makes sense once both systems' mechanics, not just their names, are understood.
+That is the resolution: `Proxy` + `CommandProtocol` + `+@dynamic_interface+` + a YAML command file is one complete, self-consistent system. `DynamicProxy` + `DynamicCommandProtocol` + `+@dynamic_command+` is a second, equally complete system, built to remove the "Control Server must already be running" requirement the first system carries. Neither is migration debt disguised as two systems. They are two different answers that coexist on purpose. Which one a device driver picks is a real design choice, not an accident of when the driver happened to be written. `egse/dummy.py` (Chapter 9's worked example) uses the first system end to end. The PUNA+ and DAQ6510 drivers above use the second. `daq6510.py` freely mixes bare `+@dynamic_interface+` stubs with `+@dynamic_command+`-decorated ones on the same interface class — which only makes sense once both systems' mechanics, not just their names, are understood.
 
 P-008 originally flagged three separate issues. This chapter resolves only one: the *relationship* between `Proxy` and `DynamicProxy` is now documented, here. Both classes deserve a short cross-reference note that says the same thing, in the source itself, so the next reader does not need to find this chapter to get the same answer.
 

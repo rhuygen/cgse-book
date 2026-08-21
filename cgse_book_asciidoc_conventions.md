@@ -114,6 +114,20 @@ This is a style decision, not primarily a workaround for gotcha #1 above — tha
 
 **When this matters:** once, when converting a chapter that carried manual numbering from the Markdown source. Not an ongoing risk once a chapter's headings are clean.
 
+## Prose style: STE `-ing` classification
+
+Found 2026-08-21 while auditing chapters 3, 4, 5, 6, and 8 against the ASD-STE100 output style's `-ing` rule.
+
+The rule: use `-ing` only as a technical noun, or as part of one. In practice this needs a worked heuristic, because "does this count as a technical noun" isn't obvious case by case.
+
+**Keep** — a genuine standalone noun (`versioning`, `caching`, `docstring`, `tooling`, `reasoning`), or a two-word compound that is a real, dictionary/glossary-recognized fixed technical term (`operating system`, `working copy`, `blocking code`, `double-checked locking`) — including this book's own established vocabulary (`commanding port`, `monitoring socket`).
+
+**Fix** — a generic descriptive compound that merely *sounds* technical but names no single fixed concept (`long-running`, `user-facing` → rewrite, e.g. to `persistent`); a gerund-subject sentence (`Reversing it raises...` → `Reverse the order, and...`); a gerund after a preposition in an avoidable idiom (`instead of X-ing`, `without X-ing`, `worth X-ing`, `by X-ing`); a dangling participial phrase tacked onto a sentence's end (`...method, using types.MethodType` → split into two sentences).
+
+**Pitfall:** a blind gerund→bare-infinitive swap after `rather than` can turn ungrammatical if the preceding verb isn't already an infinitive (`logs a failure rather than raise it` is wrong). Check whether the sentence needs restructuring into two clauses instead.
+
+**Verification:** don't calibrate against another chapter's existing `-ing` rate, even one already labeled "rewritten to STE" — audit against the rule text directly. A full re-check of chapters 3–6 this way found ~87 instances an earlier pass had missed by using chapter 6 as the bar.
+
 ## Verification discipline
 
 All the gotchas above are **silent**: `asciidoctor-pdf` exits 0, prints no warning, and the only symptom is wrong-looking text in the rendered PDF. A clean build is not evidence of correct output. Before considering any chapter conversion done:

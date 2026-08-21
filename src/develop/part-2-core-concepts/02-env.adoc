@@ -16,9 +16,9 @@ Chapter 4 answered one question: what kind of configuration is this? This chapte
 
 CGSE runs at four test sites: CSL, SRON, IAS, and INTA. It also runs across several projects: PLATO, ARIEL, and CubeSpec. Three locations change per site: the data storage root, the configuration repository, and the log file location. None of these can be a `CONSTANT` in code, because the same code runs unmodified at every site.
 
-Reading `os.environ` directly at each call site is not a solution either, for three reasons:
+Direct reads of `os.environ` at each call site are not a solution either, for three reasons:
 
-* Every call site would need to remember the exact variable name, including the `<PROJECT>_` prefix convention.
+* Every call site would need to remember the exact variable name. That name always carries the `<PROJECT>_` prefix.
 * No single place could validate that a location exists, warn when it does not, or supply a fallback when a more specific variable is not set.
 * Test code that must simulate a different site or project would need to mutate `os.environ` directly, with no guarantee that other code had not already read a stale, cached value.
 
@@ -68,11 +68,11 @@ def setup_env():
 
 The module calls `setup_env()` at import time, without condition, right after the `_Env` and `NoValue` class definitions. Many modules import `egse.env`, and each import transitively triggers this same call again. The function must do its real work — reading `os.environ` and filling the cache — only once.
 
-`@static_vars`, from `egse.decorators`, attaches `is_initialized` as an attribute of the function itself. This avoids a separate global guard variable at module scope. The guard state sits next to the function it guards, instead of floating separately.
+`@static_vars`, from `egse.decorators`, attaches `is_initialized` as an attribute of the function itself. This avoids a separate global guard variable at module scope. The guard state sits next to the function it guards. It does not float separately elsewhere.
 
 This task might look like a job for `functools.lru_cache` on a zero-argument function, but `lru_cache` does not fit here. `setup_env()` must be re-runnable on demand, not only memoized once. `env_var()` (Section 8) resets `setup_env.is_initialized = False` and calls `setup_env()` again, to force a fresh read of `os.environ` after a temporary change. An outside caller cannot invalidate a cached function this cleanly. A plain attribute flag allows it.
 
-==== Why mandatory variables warn instead of raising
+==== Why Mandatory Variables Warn, Not Raise
 
 [source,python]
 ----
@@ -116,7 +116,7 @@ class _Env:
 `_Env` is a thin wrapper around a dict. Every public `get_X()` function in this module reads from `_env`, never from `os.environ` directly. Every public `set_X()` function writes to both `os.environ` and `_env`. This duplication is deliberate, for two reasons:
 
 * A child process, for example a subprocess a Control Server starts, inherits `os.environ`. It does not inherit this module's private cache. If `set_conf_data_location()` updated only `_env`, a subprocess would never see the change.
-* Reading from `_env` makes `NoValue()` possible as a distinct "never set" sentinel (Section 3.4). `os.environ.get(key)` returns plain `None` for "not set." That would collide with the `set_X(None)` convention for "clear this value on purpose," covered next.
+* A read from `_env` makes `NoValue()` possible as a distinct "never set" sentinel (Section 3.4). `os.environ.get(key)` returns plain `None` for "not set." That would collide with the `set_X(None)` convention for "clear this value on purpose," covered next.
 
 ==== `NoValue` as a Sentinel That Isn't `None`, on Purpose
 
@@ -132,14 +132,14 @@ class NoValue:
         return False
 ----
 
-Passing `None` to any `set_X()` function means "unset this variable." The convention is consistent: `set_data_storage_location(None)` deletes the environment variable. Because of this convention, `None` cannot also mean "this was never set" inside the cache.
+A call to any `set_X()` function with `None` means "unset this variable." The convention is consistent: `set_data_storage_location(None)` deletes the environment variable. Because of this convention, `None` cannot also mean "this was never set" inside the cache.
 
 A getter needs to tell two states apart: the caller cleared this value on purpose, or nobody has set it yet. Downstream, both states behave the same way — both mean "no value available." But if `_env.get()` returned plain `None` for both, `_check_no_value()` could not tell a real, meaningful `None` apart from an unset variable, and could not raise a clear error.
 
 `NoValue` solves this with a distinct type. Two properties make it work:
 
 * It is falsy. `+__bool__+` returns `False`, so a plain `if not value:` check still behaves as expected.
-* It compares equal to any other `NoValue` instance, through `+__eq__+`. Code can write `value == NoValue()` without needing `_env` to return the exact same object every time.
+* It compares equal to any other `NoValue` instance, through `+__eq__+`. Code can write `value == NoValue()`. It does not need `_env` to return the exact same object every time.
 
 `NoValue` is a small, single-purpose sentinel type, not a general-purpose null object. Section 6 covers a case where this narrow equality contract was misapplied.
 
@@ -147,7 +147,7 @@ A getter needs to tell two states apart: the caller cleared this value on purpos
 
 === The get/set/env-name triads
 
-==== The shape, using `DATA_STORAGE_LOCATION` as the model
+==== The shape, with `DATA_STORAGE_LOCATION` as the model
 
 [source,python]
 ----
@@ -183,7 +183,7 @@ def get_data_storage_location(site_id: str = None) -> str:
 Every one of the five known variables follows this same three-function shape:
 
 * `get_X_env_name()` builds the `<PROJECT>_X` string.
-* `set_X()` checks that the location exists and warns through `warnings.warn` if it does not. It never fails hard, because a caller may legitimately set a location that does not exist yet — for example, before running `--mkdir` from the CLI.
+* `set_X()` checks that the location exists and warns through `warnings.warn` if it does not. It never fails hard, because a caller may legitimately set a location that does not exist yet — for example, before that caller runs `--mkdir` from the CLI.
 * `get_X()` reads the value from `_env` and raises through `_check_no_value()` if the value is unavailable.
 
 `get_log_file_location()`, `get_conf_data_location()`, and their setters follow this same shape, with a different suffix. This chapter does not walk through each one line by line.
@@ -216,7 +216,7 @@ This branch leads to the one function in this module that does not behave the wa
 
 === A Real Bug in `has_conf_repo_location()`
 
-_Caught by reading the code and checking it._
+_Confirmed by execution, not by inspection alone._
 
 [source,python]
 ----
@@ -237,14 +237,14 @@ def get_conf_repo_location() -> str | None:
 
 Compare the two checks. `get_conf_repo_location()` checks membership against `NoValue()`, an instance. `has_conf_repo_location()` checks against `NoValue`, the class itself, with no parentheses.
 
-`+NoValue.__eq__+` (Section 3.4) returns `True` only when compared against another `NoValue` instance, through `isinstance(other, NoValue)`. A class object is never an instance of itself, so `isinstance(NoValue, NoValue)` is `False`. Also, `_env.get()` never actually returns Python's `None` (Section 3.3): `_Env.set()` deletes the key entirely, rather than storing `None`.
+`+NoValue.__eq__+` (Section 3.4) returns `True` only when compared against another `NoValue` instance, through `isinstance(other, NoValue)`. A class object is never an instance of itself, so `isinstance(NoValue, NoValue)` is `False`. Also, `_env.get()` never actually returns Python's `None` (Section 3.3): `_Env.set()` deletes the key entirely; it does not store `None`.
 
 Two cases follow:
 
 * `CONF_REPO_LOCATION` unset: `location` is a `NoValue()` instance. `location in (None, NoValue)` is `False` for both members. The function returns `False`.
 * `CONF_REPO_LOCATION` set to a real path: `location` is a string. `location in (None, NoValue)` is also `False`. The function still returns `False`.
 
-I confirmed this by running the code, not only by reading it. A quick reading tempts you to assume it works for the common case:
+I confirmed this by execution, not only by inspection. A quick read tempts you to assume it works for the common case:
 
 ----
 --- not set ---
@@ -336,7 +336,7 @@ On exit, it restores the previous values and re-syncs the cache again.
 
 *A second, smaller pitfall.* `env_var()` should restore the environment even when the test body raises, since it is a `contextlib.contextmanager`. But the restoration code after `yield` runs inside no `try`/`finally` block. An exception raised inside `+with env_var(...):+` propagates before that restoration code runs. A test that fails an assertion inside the context manager leaves the overridden environment variables in place for whatever code runs next. This is a second pitfall in the same module as Section 6's bug, logged as *P-004*.
 
-The docstring adds one more note: _"This context manager is different from the one in `egse.system` because of the CGSE environment changes."_ Take this note seriously if you see both context managers imported in the same file. The two are not interchangeable, and using the wrong one will not necessarily fail loudly.
+The docstring adds one more note: _"This context manager is different from the one in `egse.system` because of the CGSE environment changes."_ Take this note seriously if you see both context managers imported in the same file. The two are not interchangeable. If you use the wrong one, it will not necessarily fail loudly.
 
 '''
 
@@ -352,7 +352,7 @@ One place outside this module calls `print_env()`: `Setup._check_conditions_for_
 
 * `--full`, for a verbose dump that includes `sys.path` and `PATH`,
 * `--doc`, to print a human-readable explanation of each variable's purpose — the same explanation this chapter gives, written for a terminal instead of for a book, and
-* `--mkdir`, to create missing directories, instead of only reporting them as missing.
+* `--mkdir`, to create missing directories, rather than only report them as missing.
 
 The `check_env_dir` and `check_env_file` inner closures exist only to avoid repeating ``main()``'s rich-formatted validation logic four times inline: a relative-path warning, a does-not-exist warning, and a not-a-directory warning. This code is routine and needs no further comment.
 
