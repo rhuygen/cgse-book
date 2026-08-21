@@ -2,7 +2,9 @@
 
 _The client/server foundation._
 
-=== Why this chapter follows Settings, Setup, and env
+=== Configuration at Runtime
+
+_Why this chapter follows Settings, Setup, and env._
 
 Chapters 4 and 5 covered what configuration exists and where it lives. This chapter covers what uses that configuration while the system runs.
 
@@ -18,7 +20,9 @@ Together, these two files define the one architectural pattern that most of CGSE
 
 This chapter covers `ControlServer` and `Proxy` before the newer `egse/registry` module, and that order is deliberate. Understanding the classic model first makes the Service Registry's value clear later. See this chapter's closing section for what comes next.
 
-=== One Process per Device, Many Clients per Process
+=== One Process, Many Clients
+
+_Why every device gets exactly one Control Server._
 
 A physical device in a test facility can safely talk to only one thing at a time. A GUI and a test script must not open a serial connection to the same hexapod independently. CGSE enforces a strict separation to prevent this:
 
@@ -29,7 +33,9 @@ This separation gives a shared test facility two things it needs. First, exclusi
 
 `ControlServer` is the shared machinery for the server side of this relationship. It is reused well beyond individual device drivers. The Storage Manager and the Configuration Manager — two of CGSE's own infrastructure services — are themselves `ControlServer` subclasses. The same request/reply, registration, and monitoring machinery that runs a hexapod Control Server also runs the service that decides where housekeeping data gets written. This reuse shows how central this one base class is.
 
-=== Three sockets, three concerns
+=== Three Sockets
+
+_Commanding, service, and monitoring — one socket each._
 
 [source,python]
 ----
@@ -44,7 +50,9 @@ self.dev_ctrl_cmd_sock = self.zcontext.socket(zmq.REP)  # the actual device comm
 * `dev_ctrl_service_sock` *(REQ/REP)* is a separate request/reply channel. It answers questions about the server itself, not the device: what is your monitoring port, are you alive (`Ping`), and other service-level questions. Keeping this socket separate from the command socket has two benefits. A client that asks "are you there?" never waits behind an in-flight device command. And a slow device command can never block the server from answering a basic liveness check.
 * `dev_ctrl_mon_sock` *(PUB)* broadcasts periodic status and HK data. PUB fits this job because monitoring differs from commanding in shape. Any number of listeners — a GUI, a logging process, a second GUI opened for debugging — can subscribe without the server tracking who is listening. The server publishes once; every subscriber receives it. A REQ/REP socket would force the server to track a client list and iterate over it on every tick. PUB/SUB gives this fan-out for free, through ZeroMQ itself.
 
-==== A self-flagged rough edge, worth reading in the source, not just this book
+==== The Poller FIXME
+
+_A self-flagged rough edge, worth reading in the source._
 
 [source,python]
 ----
@@ -57,7 +65,9 @@ This line stays in the source as-is. This section explains why it looks suspicio
 
 The Pitfalls appendix flags this as *P-007*: "verify and remove if confirmed inert." This book does not fix it outright. Removing a poller registration from a Control Server that runs day and night needs a deliberate test and a real deployment window. It does not belong as a silent edit made while writing documentation.
 
-=== `serve()` as a Single-Threaded Reactor, Not a Thread per Socket
+=== The Single-Threaded `serve()` Loop
+
+_One thread, one loop, not a thread per socket._
 
 [source,python]
 ----
@@ -91,7 +101,9 @@ while True:
 * *What this design costs:* the docstring for `schedule_task` warns about it directly: "the `callback` function is executed in the `serve()` event loop, it shall not block!" Because everything runs on one thread, one slow operation stalls every other concern of the server for the same duration. A device command that takes three seconds, or a scheduled task that blocks on network I/O, stops all other commands from being processed. It stops monitoring data from being published. It stops HK data from being collected. This is not a hidden gotcha — it is the direct, unavoidable cost of choosing a single thread over several. It is also the reason `schedule_task` exists at all, as an escape hatch described later in this section, instead of calling blocking code directly from `before_serve` or a subclass override.
 * *The 50ms poll timeout* balances two needs: react quickly to a new event, and do not spin the CPU for no reason. The timeout is not configurable per instance — it is a literal `50` written into the `serve()` method. Every Control Server needs roughly the same response time, under 100 milliseconds to a new command, so one fixed value is a reasonable simplification. No Control Server built on this base class has needed a different value so far.
 
-==== A second self-flagged rough edge, two lines above this loop
+==== The Wall-Clock Timer FIXME
+
+_Why `time_in_ms()` is the wrong clock for a long-running loop._
 
 [source,python]
 ----
@@ -107,7 +119,9 @@ Wall-clock time can jump — an NTP correction or a manual clock change can caus
 
 This gets the same treatment as the poller FIXME described above. It is formalized as *P-009* in the Pitfalls appendix, not fixed while writing documentation. Switching to a `perf_counter()`-based elapsed-time calculation is small and self-contained. But this is a live scheduling loop in a process that runs unattended. It deserves a deliberate pull request with its own test, not a silent edit.
 
-==== Why `serve()` explicitly tells you Ctrl-C won't work
+==== The Ctrl-C Policy
+
+_Why `serve()` won't let Ctrl-C interrupt it._
 
 [source,python]
 ----
@@ -127,7 +141,9 @@ The `quit()` method and the `interrupted` flag prevent this. They let the loop r
 
 `SIGTERM` is still honored, through `killer.term_signal_received` from `egse.system.SignalCatcher`. This policy does not ignore all signals. It blocks one specific thing: an interactive Ctrl-C interrupting the loop at an arbitrary instruction. An orchestrated shutdown signal can still be checked at a safe point in the loop.
 
-==== `schedule_task` and `handle_scheduled_tasks` as Explicit Cooperative Multitasking
+==== `schedule_task` and `handle_scheduled_tasks`
+
+_Explicit cooperative multitasking._
 
 [source,python]
 ----
@@ -142,7 +158,9 @@ def schedule_task(self, callback: Callable, after: float = 0.0, when: Callable =
 
 The method processes the list with an unusual pattern: it reverses the list, then pops from the end inside a `while` loop. This processes the tasks in their original order, while still allowing newly rescheduled tasks to be appended without disturbing the tasks still waiting in this pass. The pattern is routine once you see the trick.
 
-=== The Abstract Contract of Four Methods, One Theme
+=== The Four-Method Contract
+
+_One theme: how to reach this server at all._
 
 [source,python]
 ----
@@ -168,7 +186,9 @@ def get_commanding_port(self):
 
 A commanding port is a textbook `Settings` value, by Chapter 4's own rule of thumb. It is fixed per site or per deployment, not per test. Changing it means editing a YAML file, not the code.
 
-=== Registry integration and the `can_operate_without_registry()` policy hook
+=== The `can_operate_without_registry()` Hook
+
+_When a missing Service Registry is fatal, and when it isn't._
 
 [source,python]
 ----
@@ -212,7 +232,9 @@ A server that relies on OS-assigned ports has no such fallback. Without the regi
 
 `can_operate_without_registry()` is a policy hook, in the Template Method style. The right answer depends on a fact only the concrete subclass knows: whether its ports are static or dynamic. `ControlServer` supplies the mechanism — what to do with the answer — without hardcoding the policy — what the answer should be.
 
-=== `is_control_server_active()` as a Raw, Low-Level Ping, Separate From the Proxy
+=== `is_control_server_active()`
+
+_A raw, low-level ping, separate from the Proxy._
 
 [source,python]
 ----
@@ -235,15 +257,21 @@ The function stands alone, separate from any `Proxy` instance. This lets code th
 
 `is_control_server_active()` is a liveness check with no side effects. It opens a short-lived, disposable socket. This suits, for example, a startup script that probes several endpoints in sequence before deciding what to launch.
 
-=== Why `ControlServer` is not a `Proxy`, and what's shared instead
+=== Two Independent Hierarchies
+
+_Why `ControlServer` is not a `Proxy`, and what's shared instead._
 
 `ControlServer` and `Proxy`/`BaseProxy` do not share a common base class. They are two independent class hierarchies. What they share is a wire protocol: pickled Python objects sent over a ZeroMQ `REQ`/`REP` socket, with the literal strings `"Ping"` and `"Pong"` as the handshake.
 
 What is shared in code is a vocabulary: `get_commanding_port`, `get_service_port`, and `get_monitoring_port`. Both sides need to agree on what a "commanding port" means. But the server's job — own the socket, bind it, serve requests, own the device — differs enough in shape from the client's job — connect, send, wait for a reply, degrade gracefully on timeout. Forcing both into one hierarchy would not help.
 
-=== `BaseProxy` and `Proxy`, the Client Side
+=== `BaseProxy` and `Proxy`
 
-==== Three sequential responsibilities, three classes
+_The client side, in three sequential classes._
+
+==== Three Responsibilities, Three Classes
+
+_Connection, transport, and dynamic commands — one class each._
 
 [source,python]
 ----
@@ -256,7 +284,9 @@ class Proxy(BaseProxy, ControlServerConnectionInterface):  # + dynamic command l
 
 `BaseProxy` implements the actual socket handling. `Proxy` adds one more mechanism on top: the ability to grow new methods at runtime, one per command the connected Control Server actually offers. The `load_commands()` section below covers this. It is the single most distinctive thing about this class.
 
-==== `send()`, Retry, Reconnect, and the Meaning of "Connected" in ZeroMQ
+==== `send()`, Retry, and Reconnect
+
+_What "connected" means in ZeroMQ._
 
 [source,python]
 ----
@@ -286,7 +316,9 @@ This is why the retry-and-reconnect logic lives in `send()`, not in `connect_cs(
 
 `REQUEST_RETRIES = 0` is the module default, and it is worth stating plainly: by default, `send()` does not retry at all. It makes one attempt, and a timeout becomes an immediate `Failure`. Retrying is opt-in, per call (`send(data, retries=2)`). This keeps the default predictable for a caller that wants to fail fast, such as an interactive GUI that should not hang. Scripted code that expects transient network blips can still ask for retries explicitly.
 
-==== `DynamicProxy` vs `Proxy`, and an acknowledged bit of debt
+==== `DynamicProxy` vs `Proxy`
+
+_Two mechanisms for the same job, and an acknowledged bit of debt._
 
 [source,python]
 ----
@@ -307,7 +339,9 @@ The source still carries this comment: `# TODO (rik): remove all methods from Pr
 
 The Pitfalls appendix flags this as *P-008*: confirm the actual relationship between `DynamicProxy` and `Proxy`, then either consolidate them or document why both exist. This is exactly the kind of question worth a deliberate decision before a handover. A successor should not have to reverse-engineer the difference between two classes that both claim to be "the dynamic one."
 
-==== `load_commands()`, a Proxy That Grows Its Own Interface at Runtime
+==== `load_commands()`
+
+_A Proxy that grows its own interface at runtime._
 
 [source,python]
 ----
@@ -335,7 +369,9 @@ For every command name not already claimed by something else on the instance, `P
 
 *The collision guard is the one part of this worth reading closely.* If the `Proxy` already has an attribute with the given name, that attribute is overwritten only if it is not already a method carrying the `+__dynamic_interface+` marker described above. This protects two kinds of methods from a same-named device command: a connection-management method like `connect_cs`, and a regular Python method a subclass author defined without the marker. In the second case, `Proxy` logs a warning instead of silently overwriting the method. This is the practical payoff of the `ControlServerConnectionInterface`/`@dynamic_interface` split described earlier in this chapter. That split does not exist to enable the connection lifecycle of `Proxy` — it exists specifically to survive contact with `_add_commands()`.
 
-==== `get_service_proxy()`, a Proxy That Can Hand You a Different Kind of Proxy
+==== `get_service_proxy()`
+
+_A Proxy that hands you a different kind of Proxy._
 
 [source,python]
 ----
@@ -354,7 +390,9 @@ Given a device `Proxy` already connected to a Control Server's commanding endpoi
 
 The inline comment `# FIXME: Check if this is still returning the proper port` stays in the source. It is noted in the Pitfalls appendix under *P-008*, the same entry as the `DynamicProxy` question, since both point at the same part of the file needing a maintenance pass. Verifying this FIXME means exercising a live Control Server connection, not just reading the source, so it is not resolved silently here.
 
-=== `self.service_id` vs `self._service_id`, a Real Confirmed Bug
+=== `self.service_id` vs `self._service_id`
+
+_A real, confirmed bug._
 
 [source,python]
 ----
@@ -400,6 +438,8 @@ The practical consequence: any code that reads `control_server.service_id`, expe
 The appendix logs this as *P-006*, and flags it as the single highest-value fix to come out of this chapter. The fix itself is one line: rename `_service_id` to `service_id` in `register_service()`. But it deserves a deliberate look at every call site across the monorepo first. A bug that is silently always `None` is exactly the kind that other code may have already, unknowingly, worked around.
 
 === What carries forward
+
+_Findings, an open question, and what's next._
 
 This chapter produced three evidence-checked findings, and one open question that needs a deliberate decision:
 
