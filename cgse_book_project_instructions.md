@@ -33,7 +33,7 @@ cgse-book/
         04-acknowledgments.adoc
         05-acronyms.adoc
       part-1-orientation/
-        01-introduction-and-philosophy.adoc   (Ch. 1, TBW)
+        01-introduction-and-philosophy.adoc   (Ch. 1, drafted)
         02-architecture-at-a-glance.adoc      (Ch. 2, TBW)
         03-repository-tour.adoc               (Ch. 3, drafted)
       part-2-core-concepts/
@@ -41,7 +41,7 @@ cgse-book/
         02-env.adoc
         03-control-and-proxy.adoc
         07-protocol-and-command.adoc   (Ch. 7, TBW)
-        08-mixin.adoc                  (Ch. 8, TBW)
+        08-mixin.adoc                  (Ch. 8, drafted)
         09-dummy.adoc                  (Ch. 9, TBW)
         10-registry.adoc                (Ch. 10, TBW — registry as design/API; deployed-service side split to Ch. 17)
       part-3-common-utilities/

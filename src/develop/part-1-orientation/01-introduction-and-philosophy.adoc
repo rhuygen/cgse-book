@@ -1,7 +1,60 @@
 == Introduction and Philosophy
 
-_What CGSE is, and why it's built the way it is._
+_What CGSE is, and why it takes the shape it does._
 
-What CGSE is for: a framework for commanding and monitoring laboratory hardware across distributed systems. Can be used in space missions or any test environment with a system under test and measurement equipment. Why it was built as a monorepo, and the architectural philosophy behind the `+egse.*+` (library code) vs `+cgse_*+` (CLI entry-point packages) namespace split. This chapter sets the tone — CGSE is a payload-mission codebase where plausible-sounding-but-wrong numbers propagate into operational reports, so verification-before-claims is a core value.
+=== What CGSE Is For
 
-TBW.
+CGSE commands and monitors laboratory hardware. A *Control Server* owns the physical connection to one device. A *Proxy* lets a test script or a GUI talk to that device from anywhere on the network. Chapter 6 covers this pattern in depth.
+
+The framework serves more than one setting. It supports test campaigns for PLATO, ARIEL, and CubeSpec. It also fits any test setup with a system under test (SUT) and measurement equipment, inside or outside a space-mission context. A university lab that tests one temperature controller on a bench can reuse the same Control Server and Proxy pattern as a payload test campaign for a satellite instrument.
+
+CGSE is not one program. It is a framework: a set of shared building blocks, plus a plugin mechanism that lets a new device or a new service join the framework without a change to its core. The rest of this chapter covers two design choices behind that framework, and one value that shapes how this book itself gets written.
+
+=== One Repository, Many Packages
+
+_The monorepo choice, at a philosophy level; Chapter 3 shows it on disk._
+
+CGSE lives in one monorepo: a single repository that holds every library, every device driver, and every mission-specific package in the framework. This is a deliberate choice, not an accident of how the project grew.
+
+The reasoning is simple to state. Picture two separate repositories instead: one for a shared library, one for a device driver that depends on it. A breaking change in the library can sit unnoticed in the driver for weeks. Nobody catches it until someone runs the driver against the new library version by accident.
+
+A single repository closes that gap. One test run checks every package together. A shared-library change, and the fix it forces in a downstream driver, land in one commit and get reviewed together.
+
+Chapter 3 shows this choice on disk. It covers the `uv` workspace that ties the packages together, the lockstep version scheme, and a full worked example of one package's layout.
+
+=== Two Namespaces, One Boundary
+
+_Why `+egse.*+` and `+cgse_*+` are not interchangeable; Chapter 3 walks the split on disk._
+
+Every package in the monorepo splits its code across two namespaces, and the split is not cosmetic.
+
+`+egse.*+` is a shared namespace package. Any package in the workspace can contribute a subtree to it, and any package can import from it. This is where library code lives: device protocols, the `ControlServer` and `Proxy` base classes, and anything else meant for direct reuse, by name, from another package.
+
+`+cgse_*+` is the opposite. Each `+cgse_*+` package (`cgse_common`, `cgse_core`, `symetrie_hexapod`, and so on) is one distribution's own private code. Nothing outside that distribution ever imports it directly.
+
+This split answers one question: how does a new device driver join the framework, without a change to the framework's own code? The answer is the entry point mechanism. A distribution registers an entry point in its own `pyproject.toml` file. Another package looks that entry point up at runtime, through Python's packaging metadata, with no import at either end. This is CGSE's plugin architecture: `cgse-core` never imports a device driver by name, and a driver package never edits `cgse-core` to be found.
+
+The philosophy behind the split is a hard line between two kinds of code: code meant for import everywhere (`+egse.*+`), and code meant for discovery, not import (`+cgse_*+`, through entry points). This sharp line lets a contributor write a device driver in a separate repository, register a handful of entry points, and have it work alongside every driver already in the monorepo. Chapter 3 walks through the split on disk, with a full worked example.
+
+=== Verification Before Claims
+
+_Why this book checks the code before it writes a sentence about it._
+
+CGSE is a payload-mission codebase. A command this framework sends can move a real hexapod under a real spacecraft instrument. A number this framework reports can end up in a real test report. A wrong number that looks plausible is more dangerous than one that looks obviously wrong, because nobody stops to check a number that already looks right.
+
+This is why About This Book states the standard this book holds itself to: check a claim against the running source before writing it down, not against memory of an earlier version, or against another chapter's earlier draft. The Pitfalls and Cleanup Backlog appendix works the same way. Every confirmed entry in it was reproduced by running the code, not inferred from reading it alone.
+
+The code carries the same value, in a smaller way. By default, a Control Server that cannot reach the Service Registry does not continue in silence. It raises an error and stops, instead of running on an unverified assumption. Chapter 6 covers this policy, and the hook one device uses to relax it.
+
+=== Scope and Structure
+
+_A short map of the four Parts ahead._
+
+The book follows the framework's own shape, not an arbitrary chapter order.
+
+* Part I, Orientation (this Part) — what CGSE is, its architecture at a glance, and a tour of the repository.
+* Part II, Core Concepts — the framework every later chapter depends on: `CONSTANT`/`Settings`/`Setup` configuration, environment variables, and the Control Server/Proxy client-server foundation, including the Service Registry's design and API.
+* Part III, `cgse-common`: The Utility Toolbox — the remaining `cgse-common` modules, grouped by theme: device communication, runtime resilience, persistence, messaging primitives, logging, and smaller odds and ends.
+* Part IV, `cgse-core`: Middleware Services — one deployed service per chapter, starting with the Service Registry as a running service, and continuing through the Storage Manager, the Configuration Manager, and the rest of CGSE's own infrastructure.
+
+Chapters 2 and 3 come next. They fill in what this chapter only sketched: the architecture at a glance, and then a full tour of the repository on disk.

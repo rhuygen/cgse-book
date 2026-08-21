@@ -4,6 +4,9 @@ Reference index for the project knowledge base. Update this file whenever a chap
 
 ## Published / drafted so far
 
+**`src/develop/part-1-orientation/01-introduction-and-philosophy.adoc` — Introduction and Philosophy**
+No specific module — opens the book. What CGSE is for (commanding and monitoring lab hardware, generic across space-mission and non-mission test setups); the monorepo choice at a philosophy level (mechanics deferred to Ch. 3); the `+egse.*+` vs `+cgse_*+` namespace split and the entry-point/plugin-architecture philosophy behind it (disk-level walkthrough deferred to Ch. 3); a "Verification Before Claims" section setting the book's tone (payload-mission stakes, ties to About This Book and the Pitfalls appendix); and a short Parts I–IV roadmap. Uses `CONTEXT.md` vocabulary throughout (monorepo, namespace package, distribution, entry point, Control Server, Proxy, Service Registry).
+
 **`src/develop/part-1-orientation/03-repository-tour.adoc` — Repository Tour**
 No specific module — covers the workspace itself: the `uv` monorepo (`libs/` vs `projects/generic|plato|ariel|ivs`), lockstep versioning via `bump.py`, the `[tool.uv.workspace]`/`[tool.uv.sources]` wiring, the `cgse-common`/`cgse-core` split (mirrored by this book's own Part structure), a worked package anatomy walkthrough (`symetrie-hexapod`), the `egse.*` namespace-package convention and its scoping to in-monorepo contributors only (external device packages should stay under their own distribution name), and the `cgse.*` entry-point families (`cgse.version`, `cgse.settings`, `cgse.service.*` via `HierarchicalEntryPoints`, `cgse.explore`, `cgse.resource`, `cgse.extension.setup_provider`, `cgse.process_management.core_services`, `cgse.storage.persistence`) that let optional packages plug into the `cgse` CLI and `cgse-core` without being hard-imported. Closes out Part I.
 Findings logged in the Pitfalls appendix: P-010 (stale docstring in `cgse_common/cgse.py` names a `cgse.command.plugins` group that the code doesn't actually use — it reads `cgse.command`), P-011 (three unexplained/unused entries in root's `[tool.uv.sources]`, and three member-level `[tool.uv.sources]` tables that are entirely redundant with what they'd inherit from root anyway).
@@ -31,8 +34,7 @@ Rewritten to ASD-STE100/Zinsser style 2026-08-21; verified against current sourc
 
 A full skeleton was scaffolded on 2026-08-12, covering Parts I–IV (orientation plus the whole core framework: `cgse-common` + `cgse-core`). Chapter numbering is global across the book; file numbering restarts at `01` within each Part folder. Coordinates (`cgse-coordinates`), GUI (`cgse-gui`), the generic device-driver projects, and the mission-specific projects (`ariel`, `ivs`, `plato`) are deliberately out of scope for this skeleton pass — planned for a later session.
 
-**`src/part-1-orientation/`** — Ch. 3 drafted (see above); Ch. 1-2 still TBW:
-- Ch. 1 `01-introduction-and-philosophy.adoc` — Introduction and Philosophy
+**`src/part-1-orientation/`** — Ch. 1 and Ch. 3 drafted (see above); Ch. 2 still TBW:
 - Ch. 2 `02-architecture-at-a-glance.adoc` — Architecture at a Glance
 
 **`src/part-2-core-concepts/`** — chapters 4–6 and 8 drafted (see above); chapters 7, 9, and 10 are still TBW placeholders continuing the same arc:
@@ -87,7 +89,7 @@ cgse-book/
         04-acknowledgments.adoc
         05-acronyms.adoc
       part-1-orientation/
-        01-introduction-and-philosophy.adoc          (Ch. 1, TBW)
+        01-introduction-and-philosophy.adoc          (Ch. 1, drafted)
         02-architecture-at-a-glance.adoc             (Ch. 2, TBW)
         03-repository-tour.adoc                      (Ch. 3, drafted)
       part-2-core-concepts/
