@@ -22,6 +22,11 @@ Modules: `egse/control.py`, `egse/proxy.py` (both in `cgse-core`)
 Covers the one-process-per-device / many-clients architecture, the three-ZeroMQ-socket topology (cmd/service/mon) and why each uses its pattern, the single-threaded reactor `serve()` loop and its blocking-callback trade-off, why Ctrl-C is deliberately disabled, `schedule_task` as cooperative multitasking, the abstract port/protocol contract tying back to the Settings framework, the `can_operate_without_registry()` policy hook, and the client-side `Proxy`/`BaseProxy` machinery — retry/reconnect semantics, `DynamicProxy` vs `Proxy`, and `load_commands()`'s runtime method injection.
 Findings logged in the Pitfalls appendix: P-006 (`ControlServer.service_id` never actually set — confirmed against three sibling classes; highest-value fix so far), P-007 (self-flagged FIXME on the monitoring socket's poller registration), P-008 (`DynamicProxy` vs `Proxy` relationship needs a decision).
 
+**`src/develop/part-2-core-concepts/08-mixin.adoc` — Mixin and Dynamics**
+Module: `egse/mixin.py` (`cgse-core`)
+Covers `DynamicCommandMixin`/`DynamicClientCommandMixin`, the `+__getattribute__+`-interception pattern shared by both, the `dynamic_command()` decorator factory (including the recently added `validate` keyword), `create_command_string()`'s template/format/callable paths, and the PUNA/PUNA+/DAQ6510 worked examples showing `@dynamic_interface`+`Proxy` and `@dynamic_command`+`DynamicProxy` as two coexisting, deliberately different systems. Resolves the relationship half of P-008 (Ch. 6); the `Proxy`-specific TODO/FIXME half of that entry stays open.
+Rewritten to ASD-STE100/Zinsser style 2026-08-21; verified against current source, including the `validate` keyword merged after the original draft. The `get_current_position`/`?p${axis}` example in the earlier draft did not exist in source and was replaced with the real `homing()` pair (`alpha.py`/`dynalpha.py`).
+
 ## Full skeleton (placeholders, all marked TBW)
 
 A full skeleton was scaffolded on 2026-08-12, covering Parts I–IV (orientation plus the whole core framework: `cgse-common` + `cgse-core`). Chapter numbering is global across the book; file numbering restarts at `01` within each Part folder. Coordinates (`cgse-coordinates`), GUI (`cgse-gui`), the generic device-driver projects, and the mission-specific projects (`ariel`, `ivs`, `plato`) are deliberately out of scope for this skeleton pass — planned for a later session.
@@ -30,9 +35,8 @@ A full skeleton was scaffolded on 2026-08-12, covering Parts I–IV (orientation
 - Ch. 1 `01-introduction-and-philosophy.adoc` — Introduction and Philosophy
 - Ch. 2 `02-architecture-at-a-glance.adoc` — Architecture at a Glance
 
-**`src/part-2-core-concepts/`** — chapters 4–6 drafted (see above); chapters 7–10 are new TBW placeholders continuing the same arc:
+**`src/part-2-core-concepts/`** — chapters 4–6 and 8 drafted (see above); chapters 7, 9, and 10 are still TBW placeholders continuing the same arc:
 - Ch. 7 `07-protocol-and-command.adoc` — `egse/protocol.py`, `egse/command.py`
-- Ch. 8 `08-mixin.adoc` — `egse/mixin.py`
 - Ch. 9 `09-dummy.adoc` — `egse/dummy.py`, the worked end-to-end example
 - Ch. 10 `10-registry.adoc` — `egse/registry/client.py`, `egse/registry/service.py` — the registry as design/API (client-side registration and discovery); the deployed-service side (`server.py`, `backend.py`) is split out to Ch. 17 in Part IV, cross-referenced rather than duplicated
 
@@ -91,7 +95,7 @@ cgse-book/
         02-env.adoc                                   (Ch. 5, drafted)
         03-control-and-proxy.adoc                     (Ch. 6, drafted)
         07-protocol-and-command.adoc                  (Ch. 7, TBW)
-        08-mixin.adoc                                 (Ch. 8, TBW)
+        08-mixin.adoc                                 (Ch. 8, drafted)
         09-dummy.adoc                                 (Ch. 9, TBW)
         10-registry.adoc                              (Ch. 10, TBW)
       part-3-common-utilities/
